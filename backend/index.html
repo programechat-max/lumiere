@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jarvis Core | Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: monospace; background-color: #121212; color: #00ff00; margin: 20px; }
+        .grid { display: flex; gap: 20px; flex-wrap: wrap; }
+        .card { border: 1px solid #333; padding: 15px; background: #1e1e1e; flex: 1; min-width: 300px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+        th { background-color: #2a2a2a; }
+        .progress-bar { background-color: #333; height: 20px; width: 100%; margin-top: 5px; }
+        .progress-fill { background-color: #00ff00; height: 100%; width: 0%; transition: width 0.5s; }
+        .alert { color: #ff4444; }
+    </style>
+</head>
+<body>
+
+    <h1>⚡ JARVIS CORE ANALİTİK PANELİ</h1>
+    
+    <div class="grid">
+        <div class="card">
+            <h2>Bugünün Makroları (Hedef: 2700 kcal)</h2>
+            <p>Alınan Kalori: <span id="today-cals">0</span> kcal</p>
+            <div class="progress-bar"><div id="cal-bar" class="progress-fill"></div></div>
+            
+            <p>Alınan Protein: <span id="today-protein">0</span> g</p>
+            <p>Alınan Karbonhidrat: <span id="today-carbs">0</span> g</p>
+            <p>Alınan Yağ: <span id="today-fats">0</span> g</p>
+        </div>
+
+        <div class="card">
+            <h2>Günlük Öğün Logu</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Öğün</th>
+                        <th>Kalori</th>
+                        <th>Protein</th>
+                    </tr>
+                </thead>
+                <tbody id="meal-table-body">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+        <h2>Son 7 Gün Kalori Trendi</h2>
+        <canvas id="historyChart" height="80"></canvas>
+    </div>
+
+    <script>
+        const API_BASE_URL = "http://127.0.0.1:8000/api";
+        const CALORY_TARGET = 2700;
+
+        async function fetchTodayData() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/nutrition/today`);
+                const data = await res.json();
+                
+                // Makroları yazdır
+                document.getElementById('today-cals').innerText = data.summary.calories;
+                document.getElementById('today-protein').innerText = data.summary.protein;
+                document.getElementById('today-carbs').innerText = data.summary.carbs;
+                document.getElementById('today-fats').innerText = data.summary.fats;
+
+                // İlerleme çubuğu hesabı
+                let perc = (data.summary.calories / CALORY_TARGET) * 100;
+                if (perc > 100) perc = 100;
+                document.getElementById('cal-bar').style.width = perc + "%";
+
+                // Tabloyu doldur
+                const tbody = document.getElementById('meal-table-body');
+                tbody.innerHTML = "";
+                data.meals.forEach(meal => {
+                    tbody.innerHTML += `<tr>
+                        <td>${meal.meal_name}</td>
+                        <td>${meal.calories}</td>
+                        <td>${meal.target_protein}g</td>
+                    </tr>`;
+                });
+
+            } catch (err) {
+                console.error("Bugünün verisi çekilemedi", err);
+            }
+        }
+
+        async function fetchHistoryData() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/nutrition/history?days=7`);
+                const data = await res.json();
+                
+                const labels = data.map(d => d.date.slice(5)); // Sadece ay-gün göster
+                const cals = data.map(d => d.calories);
+
+                const ctx = document.getElementById('historyChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Alınan Kalori',
+                            data: cals,
+                            borderColor: '#00ff00',
+                            backgroundColor: 'rgba(0, 255, 0, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'Hedef (2700)',
+                            data: Array(labels.length).fill(CALORY_TARGET),
+                            borderColor: '#ff4444',
+                            borderWidth: 1,
+                            borderDash: [5, 5],
+                            pointRadius: 0
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: '#333' } },
+                            x: { grid: { color: '#333' } }
+                        },
+                        plugins: { legend: { labels: { color: '#fff' } } }
+                    }
+                });
+            } catch (err) {
+                console.error("Geçmiş veri çekilemedi", err);
+            }
+        }
+
+        // Sayfa yüklendiğinde verileri çek
+        window.onload = () => {
+            fetchTodayData();
+            fetchHistoryData();
+        };
+    </script>
+</body>
+</html>

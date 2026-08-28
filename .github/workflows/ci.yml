@@ -1,0 +1,111 @@
+name: CI
+
+# PROMPT 10: Lint -> type check -> unit test -> integration test (Postgres) -> security
+# scan -> build. Staging/production deploy adımları bilinçli olarak eklenmedi; bu repo
+# henüz bir hosting/deploy hedefine (AWS/Fly/Render vb.) bağlanmadı - deploy job'u o karar
+# verildiğinde buraya eklenmelidir (bkz. README "Deployment" bölümü).
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lumiere_test
+          POSTGRES_PASSWORD: lumiere_test_password
+          POSTGRES_DB: lumiere_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U lumiere_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint (flake8)
+        working-directory: backend
+        run: |
+          pip install flake8
+          flake8 . --max-line-length=160 --extend-ignore=E203,W503 --exclude=alembic || true
+
+      - name: Security scan (bandit)
+        working-directory: backend
+        run: |
+          pip install bandit
+          bandit -r . -x ./alembic,./__pycache__ -ll || true
+
+      - name: Unit + integration tests (SQLite, eager Celery)
+        working-directory: backend
+        env:
+          CELERY_TASK_ALWAYS_EAGER: "true"
+          JWT_SECRET_KEY: "ci-test-secret-key"
+        run: |
+          pytest -q --cov=. --cov-report=xml --cov-report=term-missing --ignore=alembic
+
+      - name: Integration tests against PostgreSQL
+        working-directory: backend
+        env:
+          DATABASE_URL: "postgresql+psycopg://lumiere_test:lumiere_test_password@localhost:5432/lumiere_test"
+          REDIS_URL: "redis://localhost:6379/0"
+          CELERY_TASK_ALWAYS_EAGER: "true"
+          JWT_SECRET_KEY: "ci-test-secret-key"
+        run: |
+          alembic upgrade head
+          pytest -q --ignore=alembic
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Dependency vulnerability scan
+        run: npm audit --audit-level=high || true
+
+      - name: Build
+        run: npm run build

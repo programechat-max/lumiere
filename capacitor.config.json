@@ -1,0 +1,6 @@
+{
+  "appId": "com.lumiere.coaching",
+  "appName": "Lumiere Coaching",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

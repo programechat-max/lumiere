@@ -1,0 +1,29 @@
+# Bağımlılıklar / build çıktıları
+node_modules/
+dist/
+ios/App/App/public/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Veritabanı ve gizli bilgiler — ASLA commit edilmemeli / public/ klasörüne konulmamalı
+*.db
+*.sqlite
+*.sqlite3
+.env
+backend/.env
+
+# Editör / işletim sistemi
+.DS_Store
+
+# Xcode kullanıcı verileri / Pod kurulumları
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+*.xcuserstate
+ios/App/Pods/
+
+# Loglar
+*.log

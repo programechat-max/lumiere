@@ -1,0 +1,105 @@
+version: "3.9"
+
+# LUMIERE platform - yerel geliştirme altyapısı (PROMPT 1 & PROMPT 5).
+# Kullanım:
+#   docker compose up -d postgres pgadmin redis        # sadece altyapı
+#   docker compose --profile worker up -d               # + Celery worker & Flower
+#
+# Backend'i PostgreSQL + Redis'e bağlamak için backend/.env içine ekleyin:
+#   DATABASE_URL=postgresql+psycopg://lumiere:lumiere_dev_password@localhost:5432/lumiere
+#   REDIS_URL=redis://localhost:6379/0
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lumiere_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lumiere
+      POSTGRES_PASSWORD: lumiere_dev_password
+      POSTGRES_DB: lumiere
+    ports:
+      - "5432:5432"
+    volumes:
+      - lumiere_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumiere"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: lumiere_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@lumiere.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+  redis:
+    image: redis:7-alpine
+    container_name: lumiere_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- Aşağıdaki servisler `--profile worker` ile isteğe bağlı başlatılır ---
+  celery_worker:
+    build:
+      context: ./backend
+    container_name: lumiere_celery_worker
+    profiles: ["worker"]
+    command: celery -A celery_app worker --loglevel=info --concurrency=4
+    environment:
+      DATABASE_URL: postgresql+psycopg://lumiere:lumiere_dev_password@postgres:5432/lumiere
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+  celery_beat:
+    build:
+      context: ./backend
+    container_name: lumiere_celery_beat
+    profiles: ["worker"]
+    command: celery -A celery_app beat --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+psycopg://lumiere:lumiere_dev_password@postgres:5432/lumiere
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+  flower:
+    build:
+      context: ./backend
+    container_name: lumiere_flower
+    profiles: ["worker"]
+    command: celery -A celery_app flower --port=5555
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery_worker
+
+volumes:
+  lumiere_postgres_data:

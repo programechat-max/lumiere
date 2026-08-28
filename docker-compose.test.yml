@@ -1,0 +1,28 @@
+# CI/CD test ortamı (PROMPT 10) - PostgreSQL + Redis içeren izole test altyapısı.
+# Kullanım: docker compose -f docker-compose.test.yml up -d
+version: "3.9"
+
+services:
+  postgres_test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lumiere_test
+      POSTGRES_PASSWORD: lumiere_test_password
+      POSTGRES_DB: lumiere_test
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumiere_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis_test:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

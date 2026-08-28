@@ -1,0 +1,54 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+pydantic[email]
+pydantic-settings
+python-dotenv
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
+argon2-cffi
+# Files API (video onboarding'de kullanılıyor) eski sürümlerde API-key-only kimlik
+# doğrulamasıyla güvenilir çalışmayabiliyor - en azından bu sürüm veya üstü önerilir.
+# Zaten kurulu eski bir sürüm varsa: pip install -r requirements.txt --upgrade
+google-generativeai>=0.8.3
+google-genai
+python-telegram-bot[job-queue]
+pytz
+python-multipart
+
+# --- PostgreSQL / Migrations (PROMPT 1) ---
+psycopg[binary]
+alembic
+
+# --- Async görevler & zamanlama (PROMPT 5) ---
+celery
+flower
+redis
+apscheduler
+
+# --- Dosya depolama / bulut (PROMPT 4) ---
+boto3
+
+# --- Ödeme / abonelik (PROMPT 3) ---
+stripe
+
+# --- Gözlemlenebilirlik (PROMPT 7) ---
+sentry-sdk
+prometheus-fastapi-instrumentator
+
+# --- API sertleştirme (PROMPT 6) ---
+slowapi
+
+# --- iOS Push / APNs (PROMPT 9) — httpx HTTP/2 istemcisi için ---
+h2
+
+# --- 2FA/MFA (PROMPT 2, opsiyonel) ---
+pyotp
+
+# --- Test ---
+pytest
+pytest-cov
+httpx
+faker

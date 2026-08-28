@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #f97316;
+  --color-primary-hover: #ea580c;
+  --color-bg: #030712;
+}
+
+html, body, #root {
+  background-color: #030712;
+  color: #f3f4f6;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* GPU-accelerated HUD & Grid animations */
+@keyframes auth-grid-drift {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(48px, 48px, 0); }
+}
+
+@keyframes auth-scan {
+  0% { transform: translate3d(0, -100%, 0); opacity: 0; }
+  15% { opacity: 0.8; }
+  85% { opacity: 0.8; }
+  100% { transform: translate3d(0, 100%, 0); opacity: 0; }
+}
+
+@keyframes auth-glow-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(1.04); }
+}
+
+@keyframes auth-fade-up {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.auth-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(249, 115, 22, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(249, 115, 22, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  will-change: transform;
+}
+
+.auth-glow-orb {
+  animation: auth-glow-pulse 4s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.auth-scan-line {
+  animation: auth-scan 3.5s linear infinite;
+  will-change: transform, opacity;
+}
+
+.auth-fade-up {
+  animation: auth-fade-up 0.4s ease-out both;
+}
+
+/* Sekme geçişlerinde kullanılan fade-in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out both;
+}
+
+/* Slide Up */
+@keyframes slideUp {
+  from { opacity: 0; transform: translate3d(0, 16px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.animate-slideUp {
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Slide Left */
+@keyframes slideLeft {
+  from { opacity: 0; transform: translate3d(20px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.animate-slideLeft {
+  animation: slideLeft 0.3s ease-out both;
+}
+
+/* Scrollbar styling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #18181b;
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* AI Orb Pulse */
+@keyframes ai-pulse {
+  0%, 100% { box-shadow: 0 0 20px -5px rgba(249, 115, 22, 0.4); }
+  50% { box-shadow: 0 0 30px -2px rgba(249, 115, 22, 0.65); }
+}
+.animate-ai-pulse {
+  animation: ai-pulse 3s ease-in-out infinite;
+}
+
+/* Grid background for main area */
+.main-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(249, 115, 22, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(249, 115, 22, 0.03) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+/* iOS Safe Areas */
+header {
+  padding-top: max(env(safe-area-inset-top), 0px);
+}
+
+nav.fixed.bottom-0 {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
