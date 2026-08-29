@@ -26,7 +26,7 @@ body{background:var(--bg);color:var(--txt);font-family:var(--sans);line-height:1
 @keyframes drift{from{transform:translate(0,0) scale(1)}to{transform:translate(60px,40px) scale(1.15)}}
 .grid-bg{position:fixed;inset:0;z-index:-1;pointer-events:none;
   background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
-  background-size:56px 56px;mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 40%,transparent 100%)}
+  background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 40%,transparent 100%);mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 40%,transparent 100%)}
 
 /* --- nav (glass) --- */
 nav{position:sticky;top:0;z-index:50;background:rgba(7,7,8,.7);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
@@ -174,9 +174,10 @@ footer{border-top:1px solid var(--line);padding:48px 0;background:var(--bg2)}
 .foot-links a:hover{color:var(--orange)}
 .copy{font-family:var(--mono);font-size:.7rem;color:var(--dim);letter-spacing:.1em}
 
-/* --- scroll reveal --- */
-.reveal{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease}
-.reveal.in{opacity:1;transform:none}
+/* --- scroll reveal (fail-safe: JS calismazsa icerik GORUNUR kalir) --- */
+html.anim .reveal{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease}
+html.anim .reveal.in{opacity:1;transform:none}
+section[id],footer{scroll-margin-top:84px}
 
 /* --- responsive --- */
 @media(max-width:960px){

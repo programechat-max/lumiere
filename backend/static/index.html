@@ -221,9 +221,23 @@
 </footer>
 
 <script>
-const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12});
-document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
-document.querySelectorAll('details').forEach(d=>{d.addEventListener('toggle',()=>{document.querySelectorAll('details').forEach(o=>{if(o!==d)o.open=false})})});
+// 1) Onun JS calisiyorsa animasyonu aktive et (calismazsa icerik default olarak gorunur)
+document.documentElement.classList.add('anim');
+try{
+  const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.05,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+}catch(err){
+  document.querySelectorAll('.reveal').forEach(el=>el.classList.add('in'));
+}
+// 2) Garanti tetikleyici: her durumda 2.5 sn sonra her sey gorunur
+setTimeout(function(){
+  document.querySelectorAll('.reveal:not(.in)').forEach(el=>el.classList.add('in'));
+},2500);
+document.querySelectorAll('details').forEach(function(d){
+  d.addEventListener('toggle',function(){
+    document.querySelectorAll('details').forEach(function(o){if(o!==d)o.open=false});
+  });
+});
 </script>
 </body>
 </html>
