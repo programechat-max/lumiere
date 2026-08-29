@@ -93,25 +93,35 @@ function networkDiagError(url, err) {
   console.error('[Lumiere][AG] fetch basarisiz:', JSON.stringify({
     url, online, name: err?.name, message: err?.message,
   }));
+  if (err?.name === 'AbortError') {
+    return new Error(
+      `Sunucu çok yavaş yanıt verdi (uyanıyor olabilir).\n` +
+      `• Adres: ${url}\n\n` +
+      `Telefonda bir dakika bekleyip tekrar dene. Kalıcı çözüm için sunucuyu\n` +
+      `sürekli uyanık tutan ücretsiz bir izleme (örn. cron-job.org 5 dk HTTP ping) kur.`
+    );
+  }
   return new Error(
     `Sunucuya bağlanılamadı.\n` +
     `• Adres: ${url}\n` +
     `• İnternet: ${online === true ? 'var gibi' : online}\n\n` +
-    `Şunları dene: Safari'de ${url} adresini aç; Wi-Fi yerine mobil data (ya da tersini) dene; VPN açıksa kapat.`
+    `Şunları dene: Wi-Fi yerine mobil data (ya da tersini) dene; VPN açıksa kapat.`
   );
 }
 
+const REGISTER_TIMEOUT_MS = 120_000; // Render free soguk baslangic 40-120 sn surer
+const REGISTER_ATTEMPTS = 3;
+
 export async function register(fullName, email, password, preferredPlan = 'FREE') {
   const url = `${AUTH_BASE}/register`;
-  // Render free plani islem yoksa uyur (soguk baslangic ~40-60 sn). Bu yuzden
-  // 90 sn timeout + 2 deneme ile soguk baslangica karsi dayanikliyiz.
-  const attempts = 2;
+  // Render free plani islem yoksa uyur (soguk baslangic 40-120 sn). Bu yuzden
+  // 120 sn timeout + 3 deneme ile soguk baslangica karsi dayanikliyiz.
   let lastErr = null;
-  for (let attempt = 1; attempt <= attempts; attempt++) {
+  for (let attempt = 1; attempt <= REGISTER_ATTEMPTS; attempt++) {
     let res;
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 90_000);
+      const timer = setTimeout(() => controller.abort(), REGISTER_TIMEOUT_MS);
       try {
         res = await fetch(url, {
           method: 'POST',
@@ -125,8 +135,8 @@ export async function register(fullName, email, password, preferredPlan = 'FREE'
       }
     } catch (err) {
       lastErr = err;
-      if (attempt < attempts) {
-        await new Promise(r => setTimeout(r, 3000)); // soguk baslangic icin bekle ve tekrar dene
+      if (attempt < REGISTER_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 4000)); // soguk baslangic icin bekle ve tekrar dene
         continue;
       }
       throw networkDiagError(url, err);
