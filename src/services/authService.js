@@ -86,17 +86,57 @@ export async function login(email, password) {
   return data.user;
 }
 
+function networkDiagError(url, err) {
+  // WKWebView ag hatalarini "Load failed" diye dondurur - kullaniciya ve
+  // teshise yardimci zengin mesaj uret.
+  const online = (typeof navigator !== 'undefined' && navigator.onLine !== undefined) ? navigator.onLine : 'bilinmiyor';
+  console.error('[Lumiere][AG] fetch basarisiz:', JSON.stringify({
+    url, online, name: err?.name, message: err?.message,
+  }));
+  return new Error(
+    `Sunucuya bağlanılamadı.\n` +
+    `• Adres: ${url}\n` +
+    `• İnternet: ${online === true ? 'var gibi' : online}\n\n` +
+    `Şunları dene: Safari'de ${url} adresini aç; Wi-Fi yerine mobil data (ya da tersini) dene; VPN açıksa kapat.`
+  );
+}
+
 export async function register(fullName, email, password, preferredPlan = 'FREE') {
-  const res = await fetch(`${AUTH_BASE}/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ full_name: fullName, email, password, preferred_plan: preferredPlan }),
-  });
-  if (!res.ok) throw new Error(await parseErrorDetail(res, 'Kayıt başarısız oldu.'));
-  const data = await res.json();
-  persistSession(data.access_token, data.user);
-  return data.user;
+  const url = `${AUTH_BASE}/register`;
+  // Render free plani islem yoksa uyur (soguk baslangic ~40-60 sn). Bu yuzden
+  // 90 sn timeout + 2 deneme ile soguk baslangica karsi dayanikliyiz.
+  const attempts = 2;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let res;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 90_000);
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          signal: controller.signal,
+          body: JSON.stringify({ full_name: fullName, email, password, preferred_plan: preferredPlan }),
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (err) {
+      lastErr = err;
+      if (attempt < attempts) {
+        await new Promise(r => setTimeout(r, 3000)); // soguk baslangic icin bekle ve tekrar dene
+        continue;
+      }
+      throw networkDiagError(url, err);
+    }
+    if (!res.ok) throw new Error(await parseErrorDetail(res, 'Kayıt başarısız oldu.'));
+    const data = await res.json();
+    persistSession(data.access_token, data.user);
+    return data.user;
+  }
+  throw networkDiagError(url, lastErr);
 }
 
 export async function refreshAccessToken() {
