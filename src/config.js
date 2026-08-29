@@ -5,7 +5,7 @@
 //
 // iPHONE/ANDROID (Capacitor): Render'daki canlı backend URL'si.
 //      Render'da servis adını değiştirirsen burayı güncelle!
-const PRODUCTION_API_URL = 'https://lumiere-api.onrender.com';
+const PRODUCTION_API_URL = 'https://lumiere-api-ea82.onrender.com';
 
 const getApiBase = () => {
   if (typeof window !== 'undefined' && window.Capacitor) {
