@@ -174,9 +174,17 @@ export default function DashboardMaster() {
 
     try {
       console.log('[Dashboard] Fetching status...');
-      const statusRes = await fetch(`${API_BASE}/api/status`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const statusCtrl = new AbortController();
+      const statusTimer = setTimeout(() => statusCtrl.abort(), 30_000);
+      let statusRes;
+      try {
+        statusRes = await fetch(`${API_BASE}/api/status`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: statusCtrl.signal,
+        });
+      } finally {
+        clearTimeout(statusTimer);
+      }
 
       if (handleIfSessionExpired(statusRes)) return;
 

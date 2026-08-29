@@ -126,7 +126,9 @@ export async function register(fullName, email, password, preferredPlan = 'FREE'
         res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
+          // WKWebView'da cross-origin credentials:'include' "Failed to fetch" ile
+          // sonuclanabiliyor. Access token yanit govdesinde gelir, cookie gerekmez.
+          credentials: 'omit',
           signal: controller.signal,
           body: JSON.stringify({ full_name: fullName, email, password, preferred_plan: preferredPlan }),
         });
