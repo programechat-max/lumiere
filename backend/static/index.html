@@ -5,145 +5,109 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LUMIERE — AI Antrenman & Beslenme Koçu</title>
 <meta name="description" content="Fotoğraftan kalori hesabı, form analizi ve tamamen sana özel AI antrenman + beslenme programları. Rastgele şablon yok.">
-<style>
-  :root{
-    --bg:#0a0a0a; --bg2:#141414; --card:#181818; --line:#2a2a2a;
-    --orange:#f97316; --orange-soft:rgba(249,115,22,.12);
-    --green:#34d399; --green-soft:rgba(52,211,153,.1);
-    --txt:#f5f5f5; --muted:#a3a3a3; --dim:#6b6b6b;
-    --mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  }
-  *{margin:0;padding:0;box-sizing:border-box}
-  html{scroll-behavior:smooth}
-  body{background:var(--bg);color:var(--txt);font-family:var(--sans);line-height:1.6;overflow-x:hidden}
-  .mono{font-family:var(--mono)}
-  .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
-  nav{position:sticky;top:0;z-index:50;background:rgba(10,10,10,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
-  .nav-in{display:flex;align-items:center;justify-content:space-between;height:64px}
-  .logo{font-family:var(--mono);font-weight:700;font-size:1.05rem;letter-spacing:.12em}
-  .logo span{color:var(--orange)}
-  .nav-cta{font-family:var(--mono);font-size:.78rem;letter-spacing:.08em;color:#0a0a0a;background:var(--orange);padding:9px 18px;border-radius:10px;text-decoration:none;font-weight:700;transition:transform .15s}
-  .nav-cta:hover{transform:translateY(-1px)}
-  .hero{position:relative;padding:110px 0 90px;text-align:center}
-  .hero::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 300px at 50% 0%,rgba(249,115,22,.14),transparent 70%);pointer-events:none}
-  .badge{display:inline-block;font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;color:var(--orange);background:var(--orange-soft);border:1px solid rgba(249,115,22,.3);padding:6px 14px;border-radius:999px;margin-bottom:26px}
-  h1{font-size:clamp(2.1rem,6vw,3.6rem);font-weight:800;line-height:1.12;letter-spacing:-.02em}
-  h1 em{font-style:normal;color:var(--orange)}
-  .hero p{max-width:620px;margin:22px auto 0;color:var(--muted);font-size:clamp(1rem,2.2vw,1.15rem)}
-  .hero-actions{margin-top:38px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-  .btn{font-family:var(--mono);font-size:.85rem;letter-spacing:.08em;padding:15px 30px;border-radius:12px;text-decoration:none;font-weight:700;transition:transform .15s,box-shadow .15s;display:inline-block}
-  .btn-primary{color:#000;background:var(--orange);box-shadow:0 8px 30px rgba(249,115,22,.3)}
-  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 40px rgba(249,115,22,.4)}
-  .btn-ghost{color:var(--txt);border:1px solid var(--line);background:var(--card)}
-  .btn-ghost:hover{border-color:var(--orange);transform:translateY(-2px)}
-  .hero-note{margin-top:18px;font-family:var(--mono);font-size:.72rem;color:var(--dim);letter-spacing:.1em}
-  .stats{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg2)}
-  .stats-in{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:26px 0;text-align:center}
-  .stat b{display:block;font-family:var(--mono);font-size:1.35rem;color:var(--orange)}
-  .stat span{font-family:var(--mono);font-size:.68rem;color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
-  section{padding:84px 0}
-  .kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;color:var(--orange);text-transform:uppercase;margin-bottom:12px}
-  h2{font-size:clamp(1.5rem,4vw,2.2rem);font-weight:800;letter-spacing:-.01em;margin-bottom:14px}
-  .section-lead{color:var(--muted);max-width:600px;margin-bottom:44px}
-</style>
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<style>
-  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;transition:border-color .2s,transform .2s}
-  .card:hover{border-color:rgba(249,115,22,.45);transform:translateY(-3px)}
-  .card .ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;margin-bottom:16px;background:var(--orange-soft)}
-  .card h3{font-size:1rem;font-weight:700;margin-bottom:8px}
-  .card p{font-size:.88rem;color:var(--muted)}
-  .card.g .ico{background:var(--green-soft)}
-  .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-  .plan{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px 18px;position:relative;text-align:center}
-  .plan.hot{border-color:var(--orange);box-shadow:0 0 0 1px var(--orange),0 10px 40px rgba(249,115,22,.15)}
-  .tag{position:absolute;top:-11px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;background:var(--orange);color:#000;padding:4px 12px;border-radius:999px;font-weight:700;white-space:nowrap}
-  .plan h4{font-family:var(--mono);font-size:.8rem;letter-spacing:.14em;color:var(--dim)}
-  .plan .price{font-size:1.5rem;font-weight:800;margin:8px 0 2px}
-  .plan .price small{font-size:.75rem;color:var(--dim);font-weight:400}
-  .plan ul{list-style:none;margin-top:16px;text-align:left}
-  .plan li{font-size:.8rem;color:var(--muted);padding:5px 0;border-bottom:1px dashed var(--line)}
-  .plan li:last-child{border:none}
-  .plan li::before{content:"✓";color:var(--green);margin-right:8px;font-weight:700}
-  .plan li.na{color:var(--dim)}
-  .plan li.na::before{content:"—";color:var(--dim)}
-  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;counter-reset:step}
-  .step{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px}
-  .step::before{counter-increment:step;content:"0" counter(step);font-family:var(--mono);font-size:2rem;font-weight:800;color:var(--orange);display:block;margin-bottom:10px}
-  .step h3{font-size:.95rem;margin-bottom:6px}
-  .step p{font-size:.85rem;color:var(--muted)}
-  .cta{background:linear-gradient(135deg,rgba(249,115,22,.16),rgba(249,115,22,.05));border:1px solid rgba(249,115,22,.35);border-radius:24px;padding:60px 30px;text-align:center}
-  .cta h2{margin-bottom:10px}
-  .cta p{color:var(--muted);margin-bottom:30px}
-  footer{border-top:1px solid var(--line);padding:34px 0;text-align:center}
-  footer p{font-family:var(--mono);font-size:.72rem;color:var(--dim);letter-spacing:.1em}
-  @media(max-width:860px){
-    .grid-3,.steps{grid-template-columns:1fr 1fr}
-    .plans{grid-template-columns:1fr 1fr}
-  }
-  @media(max-width:560px){
-    .stats-in{grid-template-columns:1fr;gap:18px}
-    .grid-3,.steps,.plans{grid-template-columns:1fr}
-    section{padding:60px 0}
-    .hero{padding:70px 0 60px}
-  }
-</style>
+<div class="orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
+<div class="grid-bg"></div>
 
 <nav>
   <div class="wrap nav-in">
-    <div class="logo">LUMIERE<span>_</span></div>
-    <a class="nav-cta" href="#indir">UYGULAMAYI AL</a>
+    <a class="logo" href="/">LUMI<b>ERE</b>_</a>
+    <div class="nav-links">
+      <a href="#ozellikler">Özellikler</a>
+      <a href="#nasil">Nasıl Çalışır</a>
+      <a href="#uyelik">Üyelik</a>
+      <a href="#sss">SSS</a>
+    </div>
+    <a class="btn btn-primary" href="#indir">Hemen Başla</a>
   </div>
 </nav>
 
 <header class="hero">
-  <div class="wrap">
-    <div class="badge">● AI KOÇUN HAZIR</div>
-    <h1>Rastgele şablon yok.<br><em>Sana özel</em> program var.</h1>
-    <p>LUMIERE; hedeflerini, ekipmanını, sakatlıklarını ve damak zevkini öğrenerek tamamen sana özel antrenman ve beslenme programı oluşturur. Yemeğin fotoğrafından kalori ve makrolar saniyeler içinde hesaplanır.</p>
-    <div class="hero-actions">
-      <a class="btn btn-primary" href="#indir">ÜCRETSİZ BAŞLA →</a>
-      <a class="btn btn-ghost" href="#ozellikler">KEŞFET</a>
+  <div class="wrap hero-grid">
+    <div>
+      <div class="pill"><span class="dot"></span> AI ANTRENMAN &amp; BESLENME KOÇU — V0.1</div>
+      <h1>Rastgele şablon yok.<br><span class="grad">Sana özel</span> program var.</h1>
+      <p class="lead">LUMIERE hedeflerini, ekipmanını, sakatlıklarını ve damak zevkini öğrenerek tamamen sana özel antrenman ve beslenme programı yazar. Yemeğin fotoğrafından kalori ve makrolar saniyeler içinde hesaplanır.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary btn-lg" href="#indir">Ücretsiz Başla →</a>
+        <a class="btn btn-ghost btn-lg" href="#ozellikler">Keşfet</a>
+      </div>
+      <div class="trust">
+        <span>Kredi kartı gerekmez</span>
+        <span>2 dakikada kurulum</span>
+        <span>26+ kişiselleştirme sorusu</span>
+      </div>
     </div>
-    <div class="hero-note">KAYIT İÇİN UYGULAMA GEREKLİ — KREDİ KARTI YOK</div>
+    <div class="phone-zone">
+      <div class="chip c1"><em>+485 kcal</em><small>KALORİ · KALAN</small></div>
+      <div class="chip c2"><em>PUSH GÜNÜ</em><small>BUGÜNÜN ANTRENMANI</small></div>
+      <div class="chip c3"><em>%94 uyum</em><small>PROGRAM TAKİBİ</small></div>
+      <div class="phone">
+        <div class="screen">
+          <div class="scr-top"><span>09:41</span><span>●●●</span></div>
+          <div class="scr-title">Merhaba, <span>Şampiyon</span></div>
+          <div class="scr-rings">
+            <div class="ring r1"><b>1.850</b><i>KCAL</i></div>
+            <div class="ring r2"><b>132g</b><i>PROT</i></div>
+            <div class="ring r3"><b>6.2k</b><i>ADIM</i></div>
+          </div>
+          <div class="scr-card"><div class="t">BUGÜNÜN ANTRENMANI</div><div class="v">Üst Vücut — <em>Push</em></div><div class="scr-bar"><i></i></div></div>
+          <div class="scr-card"><div class="t">ÖĞLE PLANI</div><div class="v">Tavuklu Bowl · <em>670 kcal</em></div></div>
+          <div class="scr-btn">JARVIS'E SOR →</div>
+        </div>
+      </div>
+    </div>
   </div>
 </header>
 
-<div class="stats">
-  <div class="wrap stats-in">
-    <div class="stat"><b>2 AI</b><span>Antrenman + Beslenme Oluşturucu</span></div>
-    <div class="stat"><b>26+</b><span>Kişiselleştirme Sorusu</span></div>
-    <div class="stat"><b>~30 sn</b><span>Fotoğraftan Kalori Analizi</span></div>
-  </div>
-</div>
-
+<div class="ticker"><div class="ticker-in">
+  <span>KİŞİSEL ANTRENMAN</span><span>FOTOĞRAFTAN KALORİ</span><span>FORM ANALİZİ</span><span>BESLENME PLANI</span><span>JARVIS ASİSTAN</span><span>İLERLEME TAKİBİ</span>
+  <span>KİŞİSEL ANTRENMAN</span><span>FOTOĞRAFTAN KALORİ</span><span>FORM ANALİZİ</span><span>BESLENME PLANI</span><span>JARVIS ASİSTAN</span><span>İLERLEME TAKİBİ</span>
+</div></div>
 <section id="ozellikler">
   <div class="wrap">
-    <div class="kicker">// ÖZELLİKLER</div>
-    <h2>Her şey tek uygulamada</h2>
-    <p class="section-lead">Spor salonunda mı, evde mi? Hangi ekipmanın var? Neleri sevmiyorsun? LUMIERE hepsini sorar ve programa işler — çünkü seni tanımadan program yazılmaz.</p>
+    <div class="sec-head reveal">
+      <div class="kicker">Özellikler</div>
+      <h2>Seni tanımadan program <span class="grad">yazılmaz</span></h2>
+      <p class="sec-lead">Spor salonunda mı, evde mi? Hangi ekipmanın var? Neleri sevmiyorsun? LUMIERE hepsini sorar ve programa işler.</p>
+    </div>
     <div class="grid-3">
-      <div class="card"><div class="ico">🏋️</div><h3>AI Antrenman Oluşturucu</h3><p>Ekipmanın, programın, sakatlıkların ve hedeflerin doğrultusunda hareket hareket, set set yazılan haftalık program.</p></div>
-      <div class="card g"><div class="ico">🥗</div><h3>AI Beslenme Oluşturucu</h3><p>Alerjilerin, bütçen, mutfak alışkanlıkların ve damak zevkine göre günlük öğün planı — makrolarıyla birlikte.</p></div>
-      <div class="card"><div class="ico">📸</div><h3>Fotoğraftan Kalori</h3><p>Tabağının fotoğrafını çek; kalori, protein, karbonhidrat ve yağ değerleri anında hesaplanır.</p></div>
-      <div class="card"><div class="ico">🎯</div><h3>Form Analizi</h3><p>Fizik fotoğrafını yükle; AI gelişimini değerlendirir ve önerilerini buna göre şekillendirir.</p></div>
-      <div class="card g"><div class="ico">📊</div><h3>İlerleme Takibi</h3><p>Kilo, set, tekrar ve vücut metriklerin izlenir; AI her hafta gelişimini analiz eder.</p></div>
-      <div class="card"><div class="ico">💬</div><h3>Jarvis Asistanı</h3><p>"Akşam ne yemeliyim?" ya da "göğüs gününü değiştir" — yaz, Jarvis halleder.</p></div>
+      <div class="card reveal"><div class="ico">🏋️</div><h3>AI Antrenman Oluşturucu</h3><p>Ekipmanın, programın, sakatlıkların ve hedeflerin doğrultusunda hareket hareket, set set yazılan haftalık program.</p></div>
+      <div class="card g reveal"><div class="ico">🥗</div><h3>AI Beslenme Oluşturucu</h3><p>Alerjilerin, bütçen, mutfak alışkanlıkların ve damak zevkine göre günlük öğün planı — makrolarıyla birlikte.</p></div>
+      <div class="card reveal"><div class="ico">📸</div><h3>Fotoğraftan Kalori</h3><p>Tabağının fotoğrafını çek; kalori, protein, karbonhidrat ve yağ değerleri anında hesaplanır.</p></div>
+      <div class="card reveal"><div class="ico">🎯</div><h3>Form Analizi</h3><p>Fizik fotoğrafını yükle; AI gelişimini değerlendirir ve önerilerini buna göre şekillendirir.</p></div>
+      <div class="card g reveal"><div class="ico">📊</div><h3>İlerleme Takibi</h3><p>Kilo, set, tekrar ve vücut metriklerin izlenir; AI her hafta gelişimini analiz eder.</p></div>
+      <div class="card reveal"><div class="ico">💬</div><h3>Jarvis Asistanı</h3><p>"Akşam ne yemeliyim?" ya da "göğüs gününü değiştir" — yaz, Jarvis halleder.</p></div>
     </div>
   </div>
 </section>
-<section style="background:var(--bg2)">
+
+<section id="nasil" style="background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
   <div class="wrap">
-    <div class="kicker">// ÜYELİK</div>
-    <h2>Sana uygun planı seç</h2>
-    <p class="section-lead">Ücretsiz başla, hazır olduğunda yükselt. Tüm planlar uygulama içinden yönetilir.</p>
+    <div class="sec-head reveal">
+      <div class="kicker">Nasıl Çalışır</div>
+      <h2>3 adımda <span class="grad">dönüşüm</span></h2>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><span class="step-num">01</span><h3>Uygulamayı indir</h3><p>iPhone'una kur, 30 saniyede kayıt ol. Kredi kartı istenmez.</p></div>
+      <div class="step reveal"><span class="step-num">02</span><h3>Profilini oluştur</h3><p>Hedeflerini anlat, istersen kamera ve mikrofonla AI'ya kendini tanıt.</p></div>
+      <div class="step reveal"><span class="step-num">03</span><h3>Programını al</h3><p>Detaylı anketi doldur; antrenman ve beslenme programın dakikalar içinde senin olur.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="uyelik">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker">Üyelik</div>
+      <h2>Sana uygun <span class="grad">planı</span> seç</h2>
+      <p class="sec-lead">Ücretsiz başla, hazır olduğunda yükselt. Tüm planlar uygulama içinden yönetilir.</p>
+    </div>
     <div class="plans">
-      <div class="plan">
-        <h4>FREE</h4>
-        <div class="price">₺0<small>/ay</small></div>
+      <div class="plan reveal">
+        <h4>FREE</h4><div class="price">₺0<small>/ay</small></div><div class="pdesc">İLK ADIM</div>
         <ul>
           <li>AI antrenman programı</li>
           <li>AI beslenme planı</li>
@@ -151,11 +115,11 @@
           <li class="na">Fotoğraftan kalori (sınırlı)</li>
           <li class="na">Form analizi</li>
         </ul>
+        <a class="btn btn-ghost" href="#indir">Başla</a>
       </div>
-      <div class="plan hot">
+      <div class="plan hot reveal">
         <div class="tag">EN POPÜLER</div>
-        <h4>PRO</h4>
-        <div class="price">₺149<small>/ay</small></div>
+        <h4>PRO</h4><div class="price">₺149<small>/ay</small></div><div class="pdesc">ÇOĞU KULLANICI İÇİN</div>
         <ul>
           <li>Free'nin her şeyi</li>
           <li>Sınırsız fotoğraftan kalori</li>
@@ -163,10 +127,10 @@
           <li>Sınırsız Jarvis mesajı</li>
           <li>Program yenileme</li>
         </ul>
+        <a class="btn btn-primary" href="#indir">Pro'yu Seç</a>
       </div>
-      <div class="plan">
-        <h4>ELİT</h4>
-        <div class="price">₺299<small>/ay</small></div>
+      <div class="plan reveal">
+        <h4>ELİT</h4><div class="price">₺299<small>/ay</small></div><div class="pdesc">CİDDİ ÇALIŞANLAR</div>
         <ul>
           <li>Pro'nun her şeyi</li>
           <li>Form analizi (fotoğraf)</li>
@@ -174,10 +138,10 @@
           <li>Öncelikli AI desteği</li>
           <li>Gelişmiş metrikler</li>
         </ul>
+        <a class="btn btn-ghost" href="#indir">Elit'i Seç</a>
       </div>
-      <div class="plan">
-        <h4>ELİT+</h4>
-        <div class="price">₺499<small>/ay</small></div>
+      <div class="plan reveal">
+        <h4>ELİT+</h4><div class="price">₺499<small>/ay</small></div><div class="pdesc">SINIRSIZ ERİŞİM</div>
         <ul>
           <li>Elit'in her şeyi</li>
           <li>Sınırsız her şey</li>
@@ -185,36 +149,81 @@
           <li>Erken erişim özellikler</li>
           <li>VIP destek</li>
         </ul>
+        <a class="btn btn-ghost" href="#indir">Elit+'ı Seç</a>
+      </div>
+    </div>
+  </div>
+</section>
+<section style="background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker">Kullanıcılar Ne Diyor</div>
+      <h2>Sonuçlar <span class="grad">konuşuyor</span></h2>
+    </div>
+    <div class="quotes">
+      <div class="quote reveal">
+        <div class="stars">★★★★★</div>
+        <p>"3 aydır kullanıyorum. Sakatlık geçmişimi sorduğu için bile program bana göre — ilk defa bir app beni tanıdığını hissettim."</p>
+        <div class="who"><div class="avatar">E</div><div><b>Emre K.</b><span>PRO ÜYE · 3 AY</span></div></div>
+      </div>
+      <div class="quote reveal">
+        <div class="stars">★★★★★</div>
+        <p>"Fotoğraf çekiyorum, kaloriyi kendim buluyorum. Yemek seçimlerini sevmediğim şeyleri çıkardı, bütçeme göre plan yaptı. Harika."</p>
+        <div class="who"><div class="avatar">S</div><div><b>Selin A.</b><span>ELİT ÜYE · 2 AY</span></div></div>
+      </div>
+      <div class="quote reveal">
+        <div class="stars">★★★★★</div>
+        <p>"Evde sadece dambıl var diye yazdım, programa sadece onları koydu. Jarvis'e 'kollarım yoruldu' yazıyorum, anında yanıt geliyor."</p>
+        <div class="who"><div class="avatar">M</div><div><b>Mert D.</b><span>PRO ÜYE · 5 AY</span></div></div>
       </div>
     </div>
   </div>
 </section>
 
-<section>
+<section id="sss">
   <div class="wrap">
-    <div class="kicker">// NASIL ÇALIŞIR</div>
-    <h2>3 adımda başla</h2>
-    <div class="steps" style="margin-top:36px">
-      <div class="step"><h3>Uygulamayı indir</h3><p>iPhone'una kur, 30 saniyede kayıt ol. Kredi kartı istenmez.</p></div>
-      <div class="step"><h3>Profilini oluştur</h3><p>Hedeflerini anlat, istersen kamera ve mikrofonla AI'ya kendini tanıt.</p></div>
-      <div class="step"><h3>Programını al</h3><p>Detaylı anketi doldur; antrenman ve beslenme programın dakikalar içinde senin olur.</p></div>
+    <div class="sec-head reveal">
+      <div class="kicker">SSS</div>
+      <h2>Merak edilenler</h2>
+    </div>
+    <div class="faq">
+      <details class="reveal"><summary>Program gerçekten bana özel mi?</summary><div class="faq-a">Evet. Kayıt sonrası 2 ayrı detaylı anketle (antrenman 6, beslenme 6 adım) ekipmanın, programın, sakatlıkların, alerjilerin, bütçen ve zevklerin öğrenilir. AI bu cevapları mutlaka uyularak programı sıfırdan yazar — hazır şablon kullanılmaz.</div></details>
+      <details class="reveal"><summary>Kayıt olmak için kredi kartı gerekiyor mu?</summary><div class="faq-a">Hayır. Free plan tamamen ücretsizdir ve kredi kartı istemez. Dilediğinde uygulama içinden Pro/Elit'e yükseltebilirsin.</div></details>
+      <details class="reveal"><summary>Kamera ve mikrofon izni zorunlu mu?</summary><div class="faq-a">Hayır — tamamen isteğe bağlı. İzin verirsen vücut videosu ve sesli anlatım ile AI profilini daha iyi tanır. Vermezsen yine de program alabilirsin.</div></details>
+      <details class="reveal"><summary>Fotoğraftan kalori hesabı nasıl çalışıyor?</summary><div class="faq-a">Yemeğinin fotoğrafını çekersin, AI görseli analiz ederek porsiyon tahminiyle kalori ve makro besin değerlerini saniyeler içinde hesaplar.</div></details>
+      <details class="reveal"><summary>Verilerim güvende mi?</summary><div class="faq-a">Verilerin şifreli bağlantı üzerinden (HTTPS) kalıcı veritabanında saklanır. İstediğin zaman hesabını ve tüm verilerini uygulama içinden silebilirsin.</div></details>
     </div>
   </div>
 </section>
 
 <section id="indir">
   <div class="wrap">
-    <div class="cta">
-      <h2>Değişim bugün başlıyor</h2>
-      <p>Ücretsiz hesabını aç, ilk programını dakikalar içinde al.</p>
-      <a class="btn btn-primary" href="#">iOS İÇİN İNDİR — YAKINDA</a>
-      <div class="hero-note" style="margin-top:16px">V0.1 — ERİŞİM İÇİN UYGULAMAYI İNDİR</div>
+    <div class="cta reveal">
+      <h2>Değişim <span class="grad" style="background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent">bugün</span> başlıyor</h2>
+      <p>Ücretsiz hesabını aç, ilk programını dakikalar içinde al. Kredi kartı yok, sözleşme yok, bahane yok.</p>
+      <a class="btn btn-primary btn-lg" href="#">iOS İçin İndir — Yakında</a>
+      <div class="cta-note">V0.1 · TEST SÜRÜMÜ</div>
     </div>
   </div>
 </section>
 
 <footer>
-  <div class="wrap"><p>LUMIERE © 2026 — AI ANTRENMAN &amp; BESLENME KOÇU</p></div>
+  <div class="wrap foot-in">
+    <a class="logo" href="/">LUMI<b>ERE</b>_</a>
+    <div class="foot-links">
+      <a href="#ozellikler">Özellikler</a>
+      <a href="#uyelik">Üyelik</a>
+      <a href="#sss">SSS</a>
+      <a href="mailto:destek@lumiere.app">İletişim</a>
+    </div>
+    <div class="copy">© 2026 LUMIERE — AI KOÇUN</div>
+  </div>
 </footer>
+
+<script>
+const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+document.querySelectorAll('details').forEach(d=>{d.addEventListener('toggle',()=>{document.querySelectorAll('details').forEach(o=>{if(o!==d)o.open=false})})});
+</script>
 </body>
 </html>
