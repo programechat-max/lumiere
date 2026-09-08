@@ -1,0 +1,3 @@
+import { Radar,MessageCircle,Calendar,Dumbbell,UtensilsCrossed } from 'lucide-react'; import type { TabKey } from '../types';
+const items:[TabKey,string,any][]=[['flow','AKIŞ',Radar],['chat','LUMIERE',MessageCircle],['daily','GÜNLÜK',Calendar],['workout','ANTRENMAN',Dumbbell],['nutrition','BESLENME',UtensilsCrossed]];
+export default function BottomNav({activeTab,onTabChange}:{activeTab:TabKey;onTabChange:(t:TabKey)=>void}){return <nav className="nav-blur border-t border-white/5 px-1 py-2 safe-bottom flex justify-around">{items.map(([key,label,Icon])=><button key={key} onClick={()=>onTabChange(key)} className={`flex flex-col items-center gap-1 px-2 py-2 text-[9px] font-bold ${activeTab===key?'text-red-light':'text-muted'}`}><Icon size={20}/>{label}</button>)}</nav>}

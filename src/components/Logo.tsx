@@ -1,0 +1,2 @@
+import { Cpu } from 'lucide-react';
+export default function Logo({size='md',showText=true}:{size?:'sm'|'md'|'lg';showText?:boolean}) { const s=size==='lg'?32:size==='sm'?18:24; return <div className="flex items-center gap-2"><div className="w-10 h-10 rounded-xl gradient-red flex items-center justify-center shadow-lg shadow-red/20"><Cpu size={s} className="text-white"/></div>{showText&&<div><b className="text-white tracking-tight">LUMIERE</b><small className="block text-[9px] text-red-light uppercase tracking-widest">Coaching</small></div>}</div>; }
