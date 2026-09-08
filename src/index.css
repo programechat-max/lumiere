@@ -990,3 +990,575 @@ nav.fixed.bottom-0 {
   margin-top: calc(4px * var(--lp-scale));
 }
 .lp-auth-footnote { text-align: center; margin-top: calc(18px * var(--lp-scale)); }
+
+/* --- Login: mobile-first, sakin ve okunaklı auth yüzeyi --- */
+.auth-login-screen {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: max(28px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-left)) max(28px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-right));
+  overflow: hidden;
+  background:
+    radial-gradient(520px 300px at 50% -90px, rgba(239, 51, 64, 0.2), transparent 72%),
+    radial-gradient(360px 420px at 100% 100%, rgba(110, 22, 39, 0.16), transparent 72%),
+    #0e0e14;
+}
+
+.auth-login-screen::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: '';
+  opacity: 0.4;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
+}
+
+.auth-login-container {
+  width: min(100%, 430px);
+  position: relative;
+  z-index: 1;
+}
+
+.auth-login-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.auth-login-brand {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 18px;
+  color: #fff;
+  border: 1px solid rgba(255, 155, 161, 0.42);
+  border-radius: 18px;
+  background: linear-gradient(145deg, #ff5d66, #c91f32);
+  box-shadow: 0 18px 38px rgba(239, 51, 64, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.auth-login-brand svg {
+  width: 27px;
+  height: 27px;
+}
+
+.auth-login-eyebrow {
+  margin: 0 0 9px;
+  color: #ff858c;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.auth-login-title {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(28px, 8vw, 36px);
+  font-weight: 900;
+  letter-spacing: -0.07em;
+  line-height: 1;
+}
+
+.auth-login-title span {
+  color: #ff6871;
+}
+
+.auth-login-subtitle {
+  margin: 11px 0 0;
+  color: #9c9ca8;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.auth-login-error {
+  margin: 0 0 12px;
+  padding: 13px 15px;
+  border: 1px solid rgba(255, 104, 113, 0.35);
+  border-radius: 14px;
+  color: #ff9da3;
+  background: rgba(239, 51, 64, 0.1);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.auth-login-card {
+  position: relative;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 26px;
+  background: rgba(24, 24, 32, 0.88);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
+}
+
+.auth-login-card::before {
+  position: absolute;
+  top: 0;
+  right: 22%;
+  left: 22%;
+  height: 2px;
+  content: '';
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(90deg, transparent, #ff6871, transparent);
+}
+
+.auth-login-card-heading p {
+  margin: 0 0 8px;
+  color: #ff858c;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.auth-login-card-heading h2 {
+  max-width: 290px;
+  margin: 0;
+  color: #f7f7f8;
+  font-size: 21px;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+}
+
+.auth-login-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.auth-login-field {
+  min-width: 0;
+}
+
+.auth-login-field label {
+  display: block;
+  margin: 0 0 8px;
+  color: #b7b7c1;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.auth-login-input {
+  display: block;
+  width: 100%;
+  height: 54px;
+  padding: 0 15px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  outline: none;
+  color: #f7f7f8;
+  background: #121219;
+  font-size: 16px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.auth-login-input::placeholder {
+  color: #5f5f6b;
+}
+
+.auth-login-input:focus {
+  border-color: rgba(255, 104, 113, 0.8);
+  background: #15151e;
+  box-shadow: 0 0 0 4px rgba(239, 51, 64, 0.12);
+}
+
+.auth-login-field-error {
+  margin: 6px 0 0;
+  color: #ff858c;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.auth-login-submit,
+.auth-login-register {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 54px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: transform 160ms ease, filter 160ms ease, border-color 160ms ease;
+}
+
+.auth-login-submit {
+  margin-top: 2px;
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #ff5d66, #d92132);
+  box-shadow: 0 14px 28px rgba(239, 51, 64, 0.22);
+}
+
+.auth-login-submit:hover,
+.auth-login-register:hover {
+  filter: brightness(1.07);
+}
+
+.auth-login-submit:active,
+.auth-login-register:active {
+  transform: translateY(1px);
+}
+
+.auth-login-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.auth-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0;
+  color: #686875;
+  font-size: 11px;
+}
+
+.auth-login-divider::before,
+.auth-login-divider::after {
+  height: 1px;
+  flex: 1;
+  content: '';
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.auth-login-register {
+  min-height: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  color: #d6d6dc;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.auth-login-register span,
+.auth-login-submit span {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.auth-login-footnote {
+  margin: 17px 0 0;
+  color: #777783;
+  text-align: center;
+  font-size: 11px;
+}
+
+.auth-login-footnote span {
+  margin-right: 5px;
+  color: #16c784;
+  font-size: 8px;
+  vertical-align: 1px;
+}
+
+@media (max-height: 700px) {
+  .auth-login-screen {
+    place-items: start center;
+    padding-top: max(18px, env(safe-area-inset-top));
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .auth-login-header {
+    margin-bottom: 16px;
+  }
+
+  .auth-login-brand {
+    width: 46px;
+    height: 46px;
+    margin-bottom: 11px;
+    border-radius: 14px;
+  }
+
+  .auth-login-brand svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .auth-login-card {
+    padding: 20px;
+  }
+}
+
+/* ============================================================
+   LUMIERE UI SYSTEM · shared polish for every live surface
+   Auth, onboarding, builder, dashboard, settings and admin use
+   the same spacing, control sizes and mobile-safe layout.
+   ============================================================ */
+:root {
+  --ui-red: #ef3340;
+  --ui-red-soft: #ff7b83;
+  --ui-bg: #0e0e14;
+  --ui-surface: #181820;
+  --ui-surface-raised: #20202a;
+  --ui-border: rgba(255, 255, 255, 0.11);
+  --ui-muted: #9696a4;
+  --ui-content-max: 560px;
+}
+
+.lumiere-app-shell {
+  color: #f7f7f8;
+  background:
+    radial-gradient(700px 420px at 50% -160px, rgba(239, 51, 64, 0.12), transparent 72%),
+    var(--ui-bg);
+}
+
+.lumiere-app-shell button,
+.lumiere-app-shell input,
+.lumiere-app-shell textarea,
+.lumiere-app-shell select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lumiere-app-shell button {
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease, filter 160ms ease;
+}
+
+/* Onboarding and both program-builder modes share a calm readable column. */
+.lumiere-app-shell.safe-page {
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(28px, env(safe-area-inset-bottom));
+}
+
+.lumiere-app-shell.safe-page > div.relative,
+.lumiere-app-shell.safe-page > div.w-full,
+.lumiere-app-shell > div.relative.w-full.max-w-xl {
+  width: min(100%, var(--ui-content-max));
+  margin-inline: auto;
+}
+
+.lumiere-app-shell.safe-page > div.relative,
+.lumiere-app-shell > div.relative.w-full.max-w-xl {
+  padding-bottom: 16px;
+}
+
+.lumiere-app-shell.safe-page .lp-panel,
+.lumiere-app-shell > div.relative.w-full.max-w-xl .lp-panel {
+  border-color: var(--ui-border);
+  border-radius: 24px;
+  background: rgba(24, 24, 32, 0.9);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.lumiere-app-shell.safe-page h1,
+.lumiere-app-shell.safe-page h2,
+.lumiere-app-shell > div.relative.w-full.max-w-xl h1,
+.lumiere-app-shell > div.relative.w-full.max-w-xl h2 {
+  letter-spacing: -0.045em;
+}
+
+.lumiere-app-shell.safe-page input:not([type='checkbox']):not([type='radio']),
+.lumiere-app-shell.safe-page textarea,
+.lumiere-app-shell.safe-page select,
+.lumiere-app-shell > div.relative.w-full.max-w-xl input:not([type='checkbox']):not([type='radio']),
+.lumiere-app-shell > div.relative.w-full.max-w-xl textarea,
+.lumiere-app-shell > div.relative.w-full.max-w-xl select {
+  min-height: 50px;
+  border-radius: 14px;
+  border-color: rgba(255, 255, 255, 0.13);
+  background: #121219;
+  font-size: 16px;
+}
+
+.lumiere-app-shell.safe-page input:focus,
+.lumiere-app-shell.safe-page textarea:focus,
+.lumiere-app-shell.safe-page select:focus,
+.lumiere-app-shell > div.relative.w-full.max-w-xl input:focus,
+.lumiere-app-shell > div.relative.w-full.max-w-xl textarea:focus,
+.lumiere-app-shell > div.relative.w-full.max-w-xl select:focus {
+  border-color: rgba(255, 104, 113, 0.8);
+  box-shadow: 0 0 0 4px rgba(239, 51, 64, 0.1);
+}
+
+.lumiere-app-shell.safe-page label,
+.lumiere-app-shell > div.relative.w-full.max-w-xl label {
+  color: #b4b4c0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.lumiere-app-shell .lp-stepper {
+  gap: 5px;
+  margin: 16px 0 22px;
+}
+
+.lumiere-app-shell .lp-stepper b {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.lumiere-app-shell .lp-stepper b.on {
+  background: linear-gradient(90deg, #ff6871, #d92132);
+}
+
+/* Dashboard shell and cards. */
+.app-dashboard .lp-column {
+  width: min(100%, 720px);
+  max-width: 720px;
+}
+
+.app-dashboard > .lp-main {
+  width: min(calc(100% - 32px), 720px);
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+.app-dashboard .lp-phone-header {
+  padding-inline: 0;
+}
+
+.app-dashboard .lp-panel {
+  border-color: var(--ui-border);
+  border-radius: 22px;
+  background: rgba(24, 24, 32, 0.84);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.2);
+}
+
+.app-dashboard .lp-hero {
+  border-radius: 26px;
+  box-shadow: 0 20px 44px rgba(99, 13, 28, 0.25);
+}
+
+.app-dashboard .lp-section-kicker {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+
+.app-dashboard .lp-panel-heading strong {
+  font-size: 15px;
+}
+
+.app-dashboard .lp-stat {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.app-dashboard .lp-jarvis-input {
+  min-height: 52px;
+  border-radius: 15px;
+}
+
+.app-dashboard .lp-jarvis-input input {
+  min-width: 0;
+  min-height: 40px;
+  font-size: 16px !important;
+}
+
+.app-dashboard .lp-quick {
+  border-radius: 18px;
+  padding: 16px;
+  text-align: left;
+}
+
+/* Bottom navigation: larger hit targets and labels that do not look like debug text. */
+.app-dashboard .lp-bottom-nav {
+  max-width: min(520px, calc(100% - 24px));
+  padding: 8px 6px max(7px, env(safe-area-inset-bottom));
+  border-radius: 22px;
+  background: rgba(25, 25, 32, 0.94);
+}
+
+.app-dashboard .lp-bottom-nav button {
+  min-height: 46px;
+  padding: 4px 2px;
+  font-size: clamp(9px, 2.3vw, 11px);
+  gap: 5px;
+}
+
+.app-dashboard .lp-bottom-nav button .lp-nav-icon {
+  width: 34px;
+  height: 25px;
+  border-radius: 10px;
+}
+
+/* Settings and admin should feel like deliberate surfaces, not raw utility markup. */
+.lumiere-app-shell .admin-panel-surface {
+  width: min(100%, 1040px);
+  max-width: 1040px !important;
+  border-radius: 28px;
+  background: rgba(18, 18, 24, 0.96);
+}
+
+.lumiere-app-shell .admin-panel-surface .lp-panel {
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.lumiere-app-shell [role='dialog'] {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.lumiere-app-shell [role='dialog'] input,
+.lumiere-app-shell [role='dialog'] select,
+.lumiere-app-shell [role='dialog'] textarea {
+  min-height: 46px;
+  font-size: 16px;
+}
+
+/* Registration uses the same controls as login. */
+.auth-screen {
+  min-height: 100dvh;
+  padding-top: max(24px, env(safe-area-inset-top)) !important;
+  padding-bottom: max(28px, env(safe-area-inset-bottom)) !important;
+  background:
+    radial-gradient(520px 300px at 50% -90px, rgba(239, 51, 64, 0.18), transparent 72%),
+    #0e0e14;
+}
+
+.auth-screen input:not([type='checkbox']):not([type='radio']) {
+  min-height: 52px;
+  font-size: 16px !important;
+}
+
+.auth-screen .lp-brand-mark {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+}
+
+.auth-screen > .relative.w-full.max-w-md {
+  width: min(100%, 430px);
+}
+
+.auth-screen .rounded-\[28px\] {
+  border-color: var(--ui-border);
+  background: rgba(24, 24, 32, 0.9);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+}
+
+.auth-screen .grid.grid-cols-4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (min-width: 760px) {
+  .auth-screen .grid.grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .lumiere-app-shell.safe-page {
+    padding-inline: 14px;
+  }
+
+  .lumiere-app-shell.safe-page .lp-panel,
+  .lumiere-app-shell > div.relative.w-full.max-w-xl .lp-panel {
+    padding: 20px;
+  }
+
+  .app-dashboard > .lp-main {
+    width: min(calc(100% - 24px), 720px);
+  }
+
+  .app-dashboard .lp-hero h2 {
+    font-size: 27px;
+  }
+}
