@@ -471,6 +471,7 @@ export default function SettingsMenu({ open, onClose, onLogout, permissions = { 
             </div>
           )}
         </div>
+        )}
         {activeTab && (
           <div className="px-5 py-4 border-t border-neutral-900">
             <button
