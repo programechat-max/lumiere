@@ -4,8 +4,7 @@ import {
   AlertTriangle, Check, Home, Building2, Trees, Clock, Zap,
   HeartPulse, ChefHat, Moon, Gauge, UtensilsCrossed, Pill, ShieldCheck,
 } from 'lucide-react';
-import { API_BASE } from '../config';
-import * as authService from '../services/authService';
+import { apiFetch } from '../services/apiClient';
 
 /**
  * PROGRAM OLUŞTURUCU (onboarding sonrası).
@@ -15,9 +14,9 @@ import * as authService from '../services/authService';
  *   🏋️ ANTRENMAN PROGRAMI OLUŞTURUCU (6 adım)
  *   🥗 BESLENME PROGRAMI OLUŞTURUCU (6 adım)
  *
- * Anketin SON sorusu cevaplandığı anda program üretimi OTOMATİK başlar
+ * Son adımda kullanıcı açıkça üretimi başlatır
  * (POST /api/program-builder/workout | /api/program-builder/nutrition).
- * Cevaplar backend'de AI prompt'una zengin bağlam olarak enjekte edilir ve
+ * Cevaplar ve varsa medya analizleri backend'de AI prompt'una zengin bağlam olarak enjekte edilir ve
  * profilin serbest metin sütunlarına işlenir (kalıcılık).
  *
  * Her iki üretici de atlanabilir; dashboard'daki manuel üretim butonları yedektir.
@@ -165,7 +164,7 @@ const NUTRITION_STATUS_MSGS = [
 ];
 
 // ---------------- ANA BİLEŞEN ----------------
-export default function ProgramBuilder({ onFinish }) {
+export default function ProgramBuilder({ onFinish, mediaContext: initialMediaContext = null }) {
   const [mode, setMode] = useState('menu'); // menu | workout | nutrition
   const [wStep, setWStep] = useState(0);    // 0..5 antrenman adımı
   const [nStep, setNStep] = useState(0);    // 0..5 beslenme adımı
@@ -177,6 +176,25 @@ export default function ProgramBuilder({ onFinish }) {
   const [errKind, setErrKind] = useState(null); // hatayı hangi üretici verdi → tekrar dene hedefi
   const [wDone, setWDone] = useState(false);
   const [nDone, setNDone] = useState(false);
+  const [mediaContext, setMediaContext] = useState(initialMediaContext);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Ebeveyn boş bir context göndermiş olsa bile önceki oturumdaki kalıcı
+    // analizleri kaçırmamak için yalnızca gerçekten veri varsa fetch'i atla.
+    if (initialMediaContext?.videoReport || initialMediaContext?.voiceResult) return undefined;
+    apiFetch('/api/onboarding/context', { timeoutMs: 20_000, retries: 1 })
+      .then((ctx) => { if (!cancelled) setMediaContext(ctx); })
+      .catch((err) => console.warn('[ProgramBuilder] medya bağlamı alınamadı:', err));
+    return () => { cancelled = true; };
+  }, [initialMediaContext]);
+
+  const videoAnalysis = mediaContext?.videoReport || mediaContext?.video_analysis || null;
+  const voiceAnalysis = mediaContext?.voiceResult || mediaContext?.voice_analysis || null;
+  const videoInstruction = videoAnalysis?.training_instruction || videoAnalysis?.report || '';
+  const voiceInstruction = voiceAnalysis?.summary || voiceAnalysis?.transcript || '';
+  const hasVideoAnalysis = Boolean(videoAnalysis);
+  const hasVoiceAnalysis = Boolean(voiceAnalysis);
 
   const updW = (k, v) => setWq((f) => ({ ...f, [k]: v }));
   const updN = (k, v) => setNq((f) => ({ ...f, [k]: v }));
@@ -188,44 +206,28 @@ export default function ProgramBuilder({ onFinish }) {
     return () => clearInterval(t);
   }, [generating]);
 
-  const extractErrorMessage = async (res, fallback) => {
-    try {
-      const data = await res.json();
-      return data.detail || fallback;
-    } catch {
-      return fallback;
-    }
-  };
-
-  const handleIfSessionExpired = (res) => {
-    if (res.status === 401) {
-      authService.clearLocalSession();
-      window.location.reload();
-      return true;
-    }
-    return false;
-  };
-
   // Anket cevaplarıyla üretimi tetikler (backend AI'ya bağlamı enjekte eder)
   const runGeneration = async (kind) => {
     setGenerating(kind);
     setErrKind(kind);
     setGenError('');
     setGenMsgIdx(0);
-    const payload = kind === 'workout' ? wq : nq;
+    const payload = { ...(kind === 'workout' ? wq : nq) };
+    // Analiz bağlamı DB'de de mevcut; ayrıca bu isteğe açıkça ekleyerek
+    // questionnaire prompt'unda kesin görünmesini sağla.
+    if (kind === 'workout' && videoInstruction && !payload.notes) {
+      payload.notes = `VIDEO ANALİZİNE GÖRE ÖNCELİKLER: ${videoInstruction}`;
+    }
+    if (kind === 'nutrition' && voiceInstruction && !payload.notes) {
+      payload.notes = `SES KAYDINDAN ANLAŞILAN TERCİHLER/RUTİN: ${voiceInstruction}`;
+    }
     try {
-      const res = await fetch(`${API_BASE}/api/program-builder/${kind}`, {
+      await apiFetch(`/api/program-builder/${kind}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authService.getAccessToken()}`,
-        },
         body: JSON.stringify(payload),
+        timeoutMs: 180_000,
+        retries: 1,
       });
-      if (handleIfSessionExpired(res)) return;
-      if (!res.ok) {
-        throw new Error(await extractErrorMessage(res, 'Program üretilirken bir hata oluştu'));
-      }
       if (kind === 'workout') setWDone(true);
       else setNDone(true);
       setMode('menu');
@@ -250,21 +252,22 @@ export default function ProgramBuilder({ onFinish }) {
   // ---------------- EKRAN: ÜRETİM SÜRÜYOR ----------------
   if (generating) {
     return (
-      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
+      <div className="lumiere-app-shell safe-page text-white flex items-center justify-center p-4">
         <div
           className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(249,115,22,0.08), transparent 70%)' }}
+          style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(239,51,64,0.08), transparent 70%)' }}
         />
         <div className="relative w-full max-w-md text-center space-y-6 animate-fadeIn">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
-            <RefreshCw className="w-8 h-8 text-orange-400 animate-spin" />
+          <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-br from-red-400/20 to-red-900/30 border border-red-400/30 flex items-center justify-center shadow-xl shadow-red-950/20">
+            <RefreshCw className="w-8 h-8 text-red-300 animate-spin" />
           </div>
-          <h1 className="text-xl font-black font-mono tracking-wide">
-            {generating === 'workout' ? 'PROGRAMIN OLUŞTURULUYOR' : 'BESLENME PLANIN OLUŞTURULUYOR'}
+          <p className="lp-section-kicker">Lumiere planını işliyor</p>
+          <h1 className="text-2xl font-black tracking-[-0.055em]">
+            {generating === 'workout' ? 'Antrenman programın hazırlanıyor.' : 'Beslenme planın hazırlanıyor.'}
           </h1>
           <p className="text-sm text-neutral-400 font-mono min-h-[20px]">{genMsg}</p>
           <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-            <div className="h-full w-1/3 bg-orange-500 rounded-full animate-[loading_2.5s_ease-in-out_infinite]" />
+            <div className="h-full w-1/3 bg-red-500 rounded-full animate-[loading_2.5s_ease-in-out_infinite]" />
           </div>
           <p className="text-[11px] text-neutral-600 leading-relaxed">
             AI senin cevaplarına göre sıfırdan tasarlıyor — bu işlem 1-2 dakika sürebilir.
@@ -280,32 +283,44 @@ export default function ProgramBuilder({ onFinish }) {
     const cards = [
       {
         kind: 'workout', Icon: Dumbbell, title: 'Antrenman Programı Oluşturucu',
-        desc: '6 detaylı soru: ekipmanın, programın, sakatlıkların ve hedeflerin sorulacak — sonra programın sıfırdan yazılacak.',
-        done: wDone, accent: 'orange',
+        desc: hasVideoAnalysis
+          ? 'Video analizindeki kas/form öncelikleriyle birlikte ekipman, güvenlik ve zamanın sorulacak — program buna göre yazılacak.'
+          : 'Ekipmanın, programın, sakatlıkların ve hedeflerin sorulacak — sonra programın sıfırdan yazılacak.',
+        done: wDone, accent: 'red',
       },
       {
         kind: 'nutrition', Icon: Salad, title: 'Beslenme Programı Oluşturucu',
-        desc: '6 detaylı soru: alerjilerin, bütçen, mutfak alışkanlıkların ve damak zevkin sorulacak — sonra günlük planın kurulacak.',
+        desc: hasVoiceAnalysis
+          ? 'Ses kaydındaki beslenme/rutin tercihleri temel alınarak alerji, bütçe ve öğün ayrıntıların sorulacak.'
+          : 'Alerjilerin, bütçen, mutfak alışkanlıkların ve damak zevkin sorulacak — sonra günlük planın kurulacak.',
         done: nDone, accent: 'emerald',
       },
     ];
 
     return (
-      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4 sm:p-6">
+      <div className="lumiere-app-shell safe-page text-white flex items-center justify-center p-4 sm:p-6">
         <div
           className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(249,115,22,0.07), transparent 70%)' }}
+          style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(239,51,64,0.07), transparent 70%)' }}
         />
         <div className="relative w-full max-w-xl space-y-5 animate-fadeIn">
           <div className="text-center space-y-2">
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
-              <Sparkles className="w-7 h-7 text-orange-400" />
+            <div className="w-14 h-14 mx-auto rounded-3xl bg-gradient-to-br from-red-400/20 to-red-900/30 border border-red-400/30 flex items-center justify-center shadow-xl shadow-red-950/20">
+              <Sparkles className="w-7 h-7 text-red-300" />
             </div>
-            <h1 className="text-2xl font-black font-mono tracking-wide">SON ADIM: <span className="text-orange-500">PROGRAMLARIN</span></h1>
+            <p className="lp-section-kicker">Kişisel plan stüdyosu</p>
+            <h1 className="text-3xl font-black tracking-[-0.06em]">Planlarını <span className="text-red-400">oluşturalım.</span></h1>
             <p className="text-sm text-neutral-400 leading-relaxed max-w-md mx-auto">
               Profilin hazır. Şimdi iki ayrı detaylı anketle programlarını tamamen
               sana özel kuracağım — <span className="text-white font-bold">rastgele şablon yok</span>.
             </p>
+            {(hasVideoAnalysis || hasVoiceAnalysis) && (
+              <div className="mx-auto max-w-md text-left bg-red-500/5 border border-red-500/20 rounded-xl px-3 py-2.5 text-[11px] text-neutral-300">
+                <p className="font-mono text-red-400 mb-1">AKTİF AI BAĞLAMI</p>
+                <p>{hasVideoAnalysis ? '✓ Video fizik/form analizi antrenmana aktarılacak.' : '○ Video analizi yok; antrenman soruları genel profil üzerinden.'}</p>
+                <p>{hasVoiceAnalysis ? '✓ Ses kaydı tercihleri beslenme planına aktarılacak.' : '○ Ses kaydı yok; beslenme soruları genel profil üzerinden.'}</p>
+              </div>
+            )}
           </div>
 
           {genError && (
@@ -332,22 +347,29 @@ export default function ProgramBuilder({ onFinish }) {
                 className={`text-left p-5 rounded-2xl border transition-all cursor-pointer ${
                   done
                     ? 'bg-emerald-500/5 border-emerald-500/30 opacity-80 cursor-default'
-                    : 'bg-neutral-900 border-neutral-800 hover:border-orange-500/40 hover:bg-neutral-900/80'
+                    : 'bg-[#1a1a23]/80 border-white/[0.1] hover:border-red-400/40 hover:bg-[#22222d] shadow-xl shadow-black/10'
                 }`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    accent === 'orange' ? 'bg-orange-500/10 border border-orange-500/20' : 'bg-emerald-500/10 border border-emerald-500/20'
+                    accent === 'red' ? 'bg-red-500/10 border border-red-500/20' : 'bg-emerald-500/10 border border-emerald-500/20'
                   }`}>
-                    <Icon className={`w-5 h-5 ${accent === 'orange' ? 'text-orange-400' : 'text-emerald-400'}`} />
+                    <Icon className={`w-5 h-5 ${accent === 'red' ? 'text-red-400' : 'text-emerald-400'}`} />
                   </div>
                   {done ? (
                     <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-full">
                       <Check className="w-3 h-3" /> Üretildi
                     </span>
                   ) : (
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 bg-neutral-800/60 border border-neutral-700/50 px-2 py-1 rounded-full">
-                      Bekliyor
+                    <span
+                      className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded-full border"
+                      style={(kind === 'workout' ? hasVideoAnalysis : hasVoiceAnalysis)
+                        ? { color: kind === 'workout' ? 'var(--lp-green)' : 'var(--lp-yellow)', borderColor: 'currentColor', background: 'rgba(255,255,255,.03)' }
+                        : { color: '#85858f', borderColor: 'rgba(255,255,255,.14)', background: 'rgba(255,255,255,.03)' }}
+                    >
+                      {kind === 'workout'
+                        ? (hasVideoAnalysis ? 'Video bağlamı' : 'Genel profil')
+                        : (hasVoiceAnalysis ? 'Ses bağlamı' : 'Genel profil')}
                     </span>
                   )}
                 </div>
@@ -355,7 +377,7 @@ export default function ProgramBuilder({ onFinish }) {
                 <p className="text-[11px] text-neutral-500 leading-relaxed mt-1.5">{desc}</p>
                 {!done && (
                   <p className={`text-[10px] font-mono mt-3 flex items-center gap-1 ${
-                    accent === 'orange' ? 'text-orange-400' : 'text-emerald-400'
+                    accent === 'red' ? 'text-red-400' : 'text-emerald-400'
                   }`}>
                     BAŞLA <ArrowRight className="w-3 h-3" />
                   </p>
@@ -367,7 +389,7 @@ export default function ProgramBuilder({ onFinish }) {
           <div className="space-y-2 pt-1">
             <button
               onClick={onFinish}
-              className="w-full bg-orange-500 hover:bg-orange-400 text-black font-bold font-mono text-sm tracking-wide py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="lp-primary w-full font-bold text-sm tracking-wide py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               PANEL'E GİT <ArrowRight className="w-4 h-4" />
             </button>
@@ -383,10 +405,10 @@ export default function ProgramBuilder({ onFinish }) {
     // ---------------- EKRAN: ANTRENMAN ANKETİ ----------------
   if (mode === 'workout') {
     return (
-      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4 sm:p-6">
+      <div className="lumiere-app-shell text-white flex items-center justify-center p-4 sm:p-6">
         <div
           className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(249,115,22,0.07), transparent 70%)' }}
+          style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(239,51,64,0.07), transparent 70%)' }}
         />
         <div className="relative w-full max-w-xl">
           <div className="mb-5">
@@ -401,14 +423,14 @@ export default function ProgramBuilder({ onFinish }) {
                 Antrenman Anketi · {wStep + 1}/6
               </span>
             </div>
-            <div className="h-1 bg-neutral-800 rounded-full overflow-hidden flex gap-1">
+            <div className="lp-stepper">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className={`h-full flex-1 rounded-full transition-all duration-300 ${i <= wStep ? 'bg-orange-500' : 'bg-neutral-800'}`} />
+                <b key={i} className={i <= wStep ? 'on' : ''} />
               ))}
             </div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/60 animate-fadeIn space-y-5">
+          <div className="lp-panel rounded-[28px] p-6 sm:p-8 shadow-2xl shadow-black/60 animate-fadeIn space-y-5">
             {/* W0: ORTAM + EKİPMAN */}
             {wStep === 0 && (
               <>
@@ -416,7 +438,7 @@ export default function ProgramBuilder({ onFinish }) {
                 <div className="grid grid-cols-3 gap-3">
                   {ENVIRONMENTS.map(({ id, label, desc, Icon }) => (
                     <OptionCard key={id} selected={wq.environment === id} onClick={() => updW('environment', id)}>
-                      <Icon className="w-5 h-5 text-orange-400 mb-2" />
+                      <Icon className="w-5 h-5 text-red-400 mb-2" />
                       <p className="text-xs font-bold">{label}</p>
                       <p className="text-[10px] text-neutral-500 mt-0.5 leading-snug">{desc}</p>
                     </OptionCard>
@@ -478,7 +500,12 @@ export default function ProgramBuilder({ onFinish }) {
             {/* W2: SAKATLIK & KISITLAR */}
             {wStep === 2 && (
               <>
-                <StepHeader Icon={ShieldCheck} title="SAKATLIK VE KISITLAR" desc="Bu bölüm çok önemli — programın güvenli olması için." />
+                <StepHeader Icon={ShieldCheck} title="SAKATLIK VE KISITLAR" desc={hasVideoAnalysis ? 'Video analizindeki form/güvenlik notlarını da doğrula; program buna göre güvenli kurulacak.' : 'Bu bölüm çok önemli — programın güvenli olması için.'} />
+                {hasVideoAnalysis && videoInstruction && (
+                  <div className="bg-red-500/5 border border-red-500/20 rounded-xl px-3.5 py-3 text-xs text-red-200 leading-relaxed">
+                    <span className="font-bold text-red-400">Video analizinden gelen öncelik:</span> {videoInstruction}
+                  </div>
+                )}
                 <FieldShell label="Ağrıyan veya sakat bölgelerin var mı? (seç veya yaz)">
                   <ChipGroup
                     items={INJURY_CHIPS}
@@ -495,7 +522,7 @@ export default function ProgramBuilder({ onFinish }) {
                     value={wq.injuries || ''}
                     onChange={(e) => updW('injuries', e.target.value || null)}
                     placeholder="Örn: sağ dizde menisküs hassasiyeti"
-                    className="w-full mt-2 bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                    className="w-full mt-2 bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
                   />
                 </FieldShell>
                 <FieldShell label="Kaçınmanı istediğin hareketler var mı? (opsiyonel)">
@@ -504,7 +531,7 @@ export default function ProgramBuilder({ onFinish }) {
                     value={wq.avoid_exercises || ''}
                     onChange={(e) => updW('avoid_exercises', e.target.value || null)}
                     placeholder="Örn: arkadan çekişli lat pulldown, derin squat"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
                   />
                 </FieldShell>
                 <StepNav onBack={() => setWStep(1)} onNext={() => setWStep(3)} nextLabel="DEVAM ET" />
@@ -549,7 +576,7 @@ export default function ProgramBuilder({ onFinish }) {
                     value={wq.liked_exercises || ''}
                     onChange={(e) => updW('liked_exercises', e.target.value || null)}
                     placeholder="Örn: incline bench, ağırlıklı şınav, hip thrust"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
                   />
                 </FieldShell>
                 <FieldShell label="Hiç istemediğin hareketler (opsiyonel)">
@@ -558,7 +585,7 @@ export default function ProgramBuilder({ onFinish }) {
                     value={wq.disliked_exercises || ''}
                     onChange={(e) => updW('disliked_exercises', e.target.value || null)}
                     placeholder="Örn: burpee, behind-the-neck press"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
                   />
                 </FieldShell>
                 <StepNav onBack={() => setWStep(3)} onNext={() => setWStep(5)} nextLabel="SON ADIM" />
@@ -568,7 +595,7 @@ export default function ProgramBuilder({ onFinish }) {
             {/* W5: KARDİYO + NOT → SEÇİM YAPILINCA ÜRETİM OTOMATİK BAŞLAR */}
             {wStep === 5 && (
               <>
-                <StepHeader Icon={Gauge} title="SON SORU!" desc="Kardiyo tercihin ne? Cevapladığın anda program üretimi otomatik başlayacak." />
+                <StepHeader Icon={Gauge} title="SON SORU!" desc="Kardiyo tercihini seç, hazır olduğunda aşağıdaki düğmeyle programı oluştur." />
                 <div className="grid grid-cols-2 gap-2.5">
                   {CARDIO_PREFS.map(({ id, label, desc }) => (
                     <OptionCard
@@ -576,7 +603,6 @@ export default function ProgramBuilder({ onFinish }) {
                       selected={wq.cardio_preference === id}
                       onClick={() => {
                         updW('cardio_preference', id);
-                        setTimeout(() => runGeneration('workout'), 600);
                       }}
                       compact
                     >
@@ -591,12 +617,20 @@ export default function ProgramBuilder({ onFinish }) {
                     onChange={(e) => updW('notes', e.target.value || null)}
                     rows={2}
                     placeholder="Örn: haftada 1 basketbol oynuyorum, sabahları enerjik oluyorum..."
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors resize-none"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors resize-none"
                   />
                 </FieldShell>
                 <p className="text-[10px] text-neutral-600 font-mono text-center">
-                  ⚡ Cevapladığın an üretim başlar — bilgilerin eksiksiz kaydedilecek.
+                  Seçimini değiştirebilir, hazır olduğunda program üretimini başlatabilirsin.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => runGeneration('workout')}
+                  disabled={!wq.cardio_preference || !!generating}
+                  className="w-full bg-red-500 hover:bg-red-400 text-white font-bold font-mono text-sm py-3 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  PROGRAMI OLUŞTUR
+                </button>
               </>
             )}
           </div>
@@ -608,7 +642,7 @@ export default function ProgramBuilder({ onFinish }) {
     // ---------------- EKRAN: BESLENME ANKETİ ----------------
   if (mode === 'nutrition') {
     return (
-      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4 sm:p-6">
+      <div className="lumiere-app-shell text-white flex items-center justify-center p-4 sm:p-6">
         <div
           className="absolute inset-0 pointer-events-none"
           style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(16,185,129,0.06), transparent 70%)' }}
@@ -626,18 +660,23 @@ export default function ProgramBuilder({ onFinish }) {
                 Beslenme Anketi · {nStep + 1}/6
               </span>
             </div>
-            <div className="h-1 bg-neutral-800 rounded-full overflow-hidden flex gap-1">
+            <div className="lp-stepper">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className={`h-full flex-1 rounded-full transition-all duration-300 ${i <= nStep ? 'bg-emerald-500' : 'bg-neutral-800'}`} />
+                <b key={i} className={i <= nStep ? 'on' : ''} />
               ))}
             </div>
           </div>
 
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/60 animate-fadeIn space-y-5">
+          <div className="lp-panel rounded-[28px] p-6 sm:p-8 shadow-2xl shadow-black/60 animate-fadeIn space-y-5">
             {/* N0: ÖĞÜN YAPISI */}
             {nStep === 0 && (
               <>
-                <StepHeader Icon={UtensilsCrossed} title="ÖĞÜN DÜZENİN NASIL?" desc="Plan, senin gerçek rutine göre kurulacak." />
+                <StepHeader Icon={UtensilsCrossed} title="ÖĞÜN DÜZENİN NASIL?" desc={hasVoiceAnalysis ? 'Ses kaydında anlattığın rutin ve tercihler burada doğrulanacak.' : 'Plan, senin gerçek rutine göre kurulacak.'} />
+                {hasVoiceAnalysis && voiceInstruction && (
+                  <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-3.5 py-3 text-xs text-emerald-200 leading-relaxed">
+                    <span className="font-bold text-emerald-400">Ses kaydından gelen bağlam:</span> {voiceInstruction}
+                  </div>
+                )}
                 <FieldShell label="Günde kaç öğün yemek istersin?">
                   <div className="grid grid-cols-5 gap-2">
                     {MEAL_COUNTS.map((m) => (
@@ -814,7 +853,7 @@ export default function ProgramBuilder({ onFinish }) {
             {/* N5: SUPPLEMENT + CHEAT MEAL → SEÇİM YAPILINCA ÜRETİM OTOMATİK BAŞLAR */}
             {nStep === 5 && (
               <>
-                <StepHeader Icon={Pill} title="SON SORU!" desc="Supplement ve cheat meal tercihin? Cevapladığın anda plan üretimi otomatik başlayacak." />
+                <StepHeader Icon={Pill} title="SON SORU!" desc="Tercihini seç, hazır olduğunda aşağıdaki düğmeyle beslenme planını oluştur." />
                 <FieldShell label="Kullandığın supplementler (birden fazla seçebilirsin)">
                   <ChipGroup
                     items={SUPPLEMENTS}
@@ -831,7 +870,6 @@ export default function ProgramBuilder({ onFinish }) {
                         selected={nq.cheat_meal === id}
                         onClick={() => {
                           updN('cheat_meal', id);
-                          setTimeout(() => runGeneration('nutrition'), 600);
                         }}
                         compact
                         accent="emerald"
@@ -851,6 +889,14 @@ export default function ProgramBuilder({ onFinish }) {
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors resize-none"
                   />
                 </FieldShell>
+                <button
+                  type="button"
+                  onClick={() => runGeneration('nutrition')}
+                  disabled={!nq.cheat_meal || !!generating}
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold font-mono text-sm py-3 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  BESLENME PLANINI OLUŞTUR
+                </button>
                 <p className="text-[10px] text-neutral-600 font-mono text-center">
                   ⚡ Cevapladığın an üretim başlar — bilgilerin eksiksiz kaydedilecek.
                 </p>
@@ -869,8 +915,8 @@ export default function ProgramBuilder({ onFinish }) {
 function StepHeader({ Icon, title, desc }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="w-10 h-10 shrink-0 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-        <Icon className="w-5 h-5 text-orange-400" />
+      <div className="w-10 h-10 shrink-0 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+        <Icon className="w-5 h-5 text-red-400" />
       </div>
       <div>
         <h2 className="text-base font-black font-mono tracking-wide">{title}</h2>
@@ -890,7 +936,7 @@ function FieldShell({ label, children }) {
 }
 
 function OptionCard({ selected, onClick, children, compact, accent }) {
-  const border = accent === 'emerald' ? 'emerald' : 'orange';
+  const border = accent === 'emerald' ? 'emerald' : 'red';
   return (
     <button
       type="button"
@@ -901,7 +947,7 @@ function OptionCard({ selected, onClick, children, compact, accent }) {
         selected
           ? border === 'emerald'
             ? 'bg-emerald-500/10 border-emerald-500/50 ring-1 ring-emerald-500/40'
-            : 'bg-orange-500/10 border-orange-500/50 ring-1 ring-orange-500/40'
+            : 'bg-red-500/10 border-red-500/50 ring-1 ring-red-500/40'
           : 'bg-neutral-950 border-neutral-800 hover:border-neutral-600'
       }`}
     >
@@ -913,7 +959,7 @@ function OptionCard({ selected, onClick, children, compact, accent }) {
 function ChipGroup({ items, selected, onToggle, accent }) {
   const active = accent === 'emerald'
     ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300'
-    : 'bg-orange-500/15 border-orange-500/50 text-orange-300';
+    : 'bg-red-500/15 border-red-500/50 text-red-300';
   return (
     <div className="flex flex-wrap gap-2">
       {items.map((item) => {
@@ -947,16 +993,10 @@ function StepNav({ onBack, onNext, nextLabel }) {
       )}
       <button
         onClick={onNext}
-        className="bg-orange-500 hover:bg-orange-400 text-black font-bold font-mono text-xs tracking-wide px-6 py-2.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+        className="bg-red-500 hover:bg-red-400 text-white font-bold font-mono text-xs tracking-wide px-6 py-2.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
       >
         {nextLabel} <ArrowRight className="w-3.5 h-3.5" />
       </button>
     </div>
   );
 }
-
-
-
-
-
-

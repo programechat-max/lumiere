@@ -19,7 +19,15 @@ _eager = settings.CELERY_TASK_ALWAYS_EAGER or not settings.REDIS_URL
 if _eager:
     logger.info("REDIS_URL tanımlı değil - Celery görevleri EAGER modda (senkron, istek içinde) çalışacak.")
 
-celery_app = Celery("lumiere", broker=_broker_url, backend=_result_backend)
+celery_app = Celery(
+    "lumiere",
+    broker=_broker_url,
+    backend=_result_backend,
+    # Worker başlarken görev modülünü mutlaka yükle. Aksi halde Redis'e iş
+    # bırakılır ancak worker görevi tanımadığı için video/program işleri
+    # sonsuza kadar pending kalır.
+    include=["tasks"],
+)
 
 celery_app.conf.update(
     task_always_eager=_eager,

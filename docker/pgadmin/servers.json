@@ -1,0 +1,15 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Lumiere Local",
+      "Group": "Lumiere",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "lumiere",
+      "Username": "lumiere",
+      "SSLMode": "prefer",
+      "Password": "lumiere_dev_password",
+      "Shared": true
+    }
+  }
+}

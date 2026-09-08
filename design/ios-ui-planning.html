@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Lumiere · iOS ekran planı</title>
+  <style>
+    :root {
+      --plan-bg: #0e0e14;
+      --plan-surface: #181820;
+      --plan-surface-2: #20202a;
+      --plan-line: rgba(255,255,255,.1);
+      --plan-text: #f7f7f8;
+      --plan-muted: #898995;
+      --plan-red: #ef3340;
+      --plan-red-2: #ff6871;
+      --plan-green: #16c784;
+      --plan-yellow: #f4ba55;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #08080c;
+      color: var(--plan-text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    .planning-shell { min-height: 100vh; padding: 36px 24px 48px; }
+    .planning-head { max-width: 1180px; margin: 0 auto 28px; display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+    .eyebrow { color: var(--plan-red-2); font-size: 10px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+    h1 { margin: 7px 0 0; font-size: clamp(28px, 4vw, 48px); line-height: .98; letter-spacing: -.06em; }
+    .head-copy { max-width: 580px; color: var(--plan-muted); margin: 12px 0 0; font-size: 14px; line-height: 1.6; }
+    .status-chip { border: 1px solid var(--plan-line); background: rgba(255,255,255,.04); color: #b8b8c0; border-radius: 999px; padding: 9px 12px; font-size: 11px; white-space: nowrap; }
+    .planning-layout { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 240px minmax(280px, 390px) minmax(260px, 1fr); gap: 20px; align-items: start; }
+    .screen-list, .plan-notes { border: 1px solid var(--plan-line); background: rgba(24,24,32,.72); border-radius: 22px; padding: 12px; backdrop-filter: blur(20px); }
+    .screen-list-title, .notes-title { color: #686873; font-size: 10px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; padding: 8px 9px 10px; }
+    .screen-button { width: 100%; display: flex; align-items: center; gap: 10px; border: 0; background: transparent; border-radius: 13px; padding: 11px 10px; color: #a4a4ae; text-align: left; font-size: 12px; transition: .2s ease; }
+    .screen-button:hover { background: rgba(255,255,255,.05); color: #fff; }
+    .screen-button.is-selected { color: #fff; background: rgba(239,51,64,.16); box-shadow: inset 0 0 0 1px rgba(239,51,64,.25); }
+    .screen-icon { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 9px; background: rgba(255,255,255,.06); color: #b4b4bd; font-size: 13px; flex: 0 0 auto; }
+    .is-selected .screen-icon { color: #fff; background: var(--plan-red); }
+    .phone-wrap { position: sticky; top: 18px; display: flex; justify-content: center; }
+    .phone { width: min(100%, 390px); min-height: 780px; border: 8px solid #24242d; border-radius: 42px; overflow: hidden; background: var(--plan-bg); box-shadow: 0 30px 90px rgba(0,0,0,.55), 0 0 0 1px #3a3a45; position: relative; }
+    .phone::before { content: ""; position: absolute; z-index: 10; top: 0; left: 50%; transform: translateX(-50%); width: 116px; height: 25px; background: #08080b; border-radius: 0 0 18px 18px; }
+    .phone-screen { display: none; min-height: 780px; padding: 44px 16px 94px; background: radial-gradient(500px 260px at 50% -100px, rgba(239,51,64,.16), transparent 68%), var(--plan-bg); }
+    .phone-screen.is-active { display: block; }
+    .phone-status { height: 18px; color: #f6f6f7; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; font-size: 11px; font-weight: 700; opacity: .92; }
+    .phone-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 24px 2px 17px; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .brand-mark { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(135deg, #ff5c65, #d51f31); box-shadow: 0 8px 18px rgba(239,51,64,.25); font-size: 18px; }
+    .brand-name { font-weight: 900; letter-spacing: -.045em; font-size: 14px; white-space: nowrap; }
+    .brand-name b { color: var(--plan-red-2); }
+    .member-since { color: #777782; font-size: 9px; margin-top: 3px; }
+    .header-actions { display: flex; gap: 6px; }
+    .icon-button { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--plan-line); border-radius: 11px; background: rgba(255,255,255,.025); color: #a6a6b0; }
+    .section-kicker { color: var(--plan-red-2); font-size: 9px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+    .screen-title { font-size: 25px; font-weight: 900; line-height: 1.03; letter-spacing: -.06em; margin: 6px 0 0; }
+    .screen-title span { color: var(--plan-red-2); }
+    .muted { color: var(--plan-muted); }
+    .small { font-size: 11px; line-height: 1.45; }
+    .hero { margin-top: 17px; padding: 18px; border: 1px solid rgba(255,104,113,.28); border-radius: 24px; background: linear-gradient(140deg, #b92032, #711524 57%, #29151d); }
+    .hero h2 { margin: 9px 0 0; font-size: 25px; line-height: .99; letter-spacing: -.06em; }
+    .hero p { color: rgba(255,237,238,.76); font-size: 12px; line-height: 1.45; margin: 12px 0 16px; }
+    .primary { display: flex; justify-content: center; align-items: center; gap: 8px; border: 0; border-radius: 14px; background: linear-gradient(135deg, #ff5d66, #d92132); box-shadow: 0 12px 22px rgba(239,51,64,.22); padding: 12px 14px; font-size: 12px; font-weight: 800; width: 100%; }
+    .ghost { border: 1px solid var(--plan-line); background: rgba(255,255,255,.035); border-radius: 13px; padding: 10px 12px; font-size: 11px; color: #bbbcc4; }
+    .panel { border: 1px solid var(--plan-line); border-radius: 21px; background: rgba(24,24,32,.82); padding: 15px; }
+    .panel + .panel { margin-top: 12px; }
+    .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .panel-heading strong { font-size: 14px; letter-spacing: -.035em; }
+    .panel-heading span { color: var(--plan-red-2); font-size: 10px; font-weight: 700; }
+    .jarvis-input { display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,.07); background: #121219; padding: 9px; border-radius: 14px; color: #656571; font-size: 11px; }
+    .jarvis-input .send { margin-left: auto; width: 31px; height: 31px; border-radius: 10px; display: grid; place-items: center; background: var(--plan-red); color: #fff; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+    .stat { text-align: center; border: 1px solid var(--plan-line); border-radius: 15px; padding: 11px 5px; background: rgba(255,255,255,.025); }
+    .ring { width: 43px; height: 43px; display: grid; place-items: center; border-radius: 50%; margin: 0 auto 7px; border: 5px solid #30302f; font-size: 10px; font-weight: 800; }
+    .ring.red { border-color: rgba(239,51,64,.75); } .ring.green { border-color: rgba(22,199,132,.75); }
+    .stat label { color: #9999a2; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+    .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .quick { min-height: 132px; text-align: left; border: 1px solid var(--plan-line); border-radius: 19px; padding: 13px; background: #1a1a23; }
+    .quick .quick-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 13px; background: rgba(239,51,64,.16); color: var(--plan-red-2); font-size: 20px; }
+    .quick.green .quick-icon { background: rgba(22,199,132,.16); color: var(--plan-green); }
+    .quick strong { display: block; margin-top: 13px; font-size: 14px; letter-spacing: -.04em; }
+    .quick p { color: #85858f; font-size: 10px; line-height: 1.4; margin: 5px 0 0; }
+    .bottom-nav { position: absolute; z-index: 5; left: 10px; right: 10px; bottom: 10px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; border: 1px solid rgba(255,255,255,.12); border-radius: 19px; background: rgba(25,25,32,.96); padding: 7px 4px 5px; box-shadow: 0 14px 30px rgba(0,0,0,.38); }
+    .bottom-nav button { border: 0; background: transparent; color: #74747f; font-size: 8px; line-height: 1; padding: 3px 1px; display: grid; justify-items: center; gap: 5px; }
+    .bottom-nav i { font-style: normal; font-size: 16px; height: 23px; width: 29px; display: grid; place-items: center; border-radius: 10px; }
+    .bottom-nav .active { color: #ff9aa0; font-weight: 800; }
+    .bottom-nav .active i { color: #fff; background: rgba(239,51,64,.55); }
+    .list-row { display: flex; align-items: center; gap: 10px; border-top: 1px solid rgba(255,255,255,.07); padding: 12px 0; }
+    .list-row:first-child { border-top: 0; padding-top: 0; }
+    .list-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; background: rgba(239,51,64,.14); color: var(--plan-red-2); flex: 0 0 auto; }
+    .list-row strong { display: block; font-size: 12px; }
+    .list-row small { color: #777782; font-size: 10px; }
+    .chat-bubble { max-width: 86%; border: 1px solid var(--plan-line); border-radius: 15px; background: rgba(255,255,255,.05); padding: 11px 12px; font-size: 11px; line-height: 1.45; margin: 9px 0; }
+    .chat-bubble.user { margin-left: auto; background: linear-gradient(135deg, #e94a55, #a91e2d); border-color: transparent; }
+    .chart { height: 135px; position: relative; overflow: hidden; border-radius: 15px; background: linear-gradient(180deg, rgba(239,51,64,.12), transparent); }
+    .chart svg { width: 100%; height: 100%; }
+    .progress-line { height: 6px; border-radius: 99px; background: #30303a; overflow: hidden; } .progress-line b { display: block; height: 100%; background: var(--plan-red); border-radius: inherit; }
+    .form-field { margin-top: 11px; } .form-field label { display: block; color: #92929c; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px; } .form-value { border: 1px solid var(--plan-line); border-radius: 12px; padding: 12px; background: #121219; color: #dddde2; font-size: 12px; }
+    .stepper { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; margin: 13px 0 18px; } .stepper b { height: 3px; border-radius: 99px; background: #34343d; } .stepper b.on { background: var(--plan-red); }
+    .plan-card { border: 1px solid var(--plan-line); border-radius: 17px; padding: 13px; background: rgba(255,255,255,.035); margin-top: 10px; } .plan-card.selected { border-color: rgba(239,51,64,.65); background: rgba(239,51,64,.1); }
+    .note-block { border-top: 1px solid rgba(255,255,255,.08); padding: 17px 4px; } .note-block:first-of-type { border-top: 0; } .note-block h3 { margin: 0 0 7px; font-size: 13px; letter-spacing: -.03em; } .note-block p, .note-block li { color: #92929d; font-size: 12px; line-height: 1.55; } .note-block ul { padding-left: 17px; margin: 8px 0 0; }
+    .legend { display: inline-flex; align-items: center; gap: 6px; color: #888894; font-size: 10px; margin-right: 10px; } .legend i { width: 7px; height: 7px; border-radius: 50%; background: var(--plan-red); } .legend i.green { background: var(--plan-green); }
+    @media (max-width: 900px) { .planning-layout { grid-template-columns: 190px minmax(280px,390px); } .plan-notes { grid-column: 1 / -1; } }
+    @media (max-width: 640px) { .planning-shell { padding: 22px 12px 30px; } .planning-head { display: block; } .status-chip { display: inline-block; margin-top: 14px; } .planning-layout { display: block; } .screen-list { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 16px; padding: 7px; } .screen-list-title { display: none; } .screen-button { width: auto; flex: 0 0 auto; padding: 8px; } .screen-button span:last-child { display: none; } .phone-wrap { position: static; } .phone { width: min(100%,390px); } .plan-notes { margin-top: 16px; } }
+  </style>
+</head>
+<body>
+  <main class="planning-shell" id="lumierePlanning">
+    <header class="planning-head">
+      <div>
+        <div class="eyebrow">Lumiere · iOS ekran planı</div>
+        <h1>Önce hissi seçelim,<br><span style="color:var(--plan-red-2)">sonra kodlayalım.</span></h1>
+        <p class="head-copy">Mevcut kırmızı/koyu tema korunarak hazırlanan örnek ekranlar. Soldan bir ekran seç; ortadaki telefon ön izlemesi ve sağdaki karar notları birlikte güncellenir.</p>
+      </div>
+      <div class="status-chip">Tasarım ön izlemesi · uygulama koduna bağlı değil</div>
+    </header>
+
+    <section class="planning-layout">
+      <nav class="screen-list" aria-label="Örnek ekranlar">
+        <div class="screen-list-title">Ekranlar</div>
+        <button class="screen-button is-selected" data-screen="flow"><span class="screen-icon">⌂</span><span>Ana akış</span></button>
+        <button class="screen-button" data-screen="chat"><span class="screen-icon">✦</span><span>Lumiere</span></button>
+        <button class="screen-button" data-screen="daily"><span class="screen-icon">◷</span><span>Günlük</span></button>
+        <button class="screen-button" data-screen="workout"><span class="screen-icon">✚</span><span>Antrenman</span></button>
+        <button class="screen-button" data-screen="nutrition"><span class="screen-icon">⌁</span><span>Mutfak</span></button>
+        <button class="screen-button" data-screen="progress"><span class="screen-icon">↗</span><span>Gelişim</span></button>
+        <button class="screen-button" data-screen="auth"><span class="screen-icon">◉</span><span>Giriş / kayıt</span></button>
+        <button class="screen-button" data-screen="onboarding"><span class="screen-icon">1</span><span>Onboarding</span></button>
+        <button class="screen-button" data-screen="builder"><span class="screen-icon">◆</span><span>Program oluşturucu</span></button>
+        <button class="screen-button" data-screen="settings"><span class="screen-icon">⚙</span><span>Ayarlar</span></button>
+        <button class="screen-button" data-screen="admin"><span class="screen-icon">⌘</span><span>Admin paneli</span></button>
+      </nav>
+
+      <div class="phone-wrap">
+        <div class="phone" aria-live="polite">
+          <section class="phone-screen is-active" data-page="flow">
+            <div class="phone-status"><span>23:19</span><span>▮▮▮ ◉ 100</span></div>
+            <div class="phone-header"><div class="brand"><div class="brand-mark">▣</div><div><div class="brand-name">LUMIERE <b>COACHING</b></div><div class="member-since">31 Ağu 2026 · 1. gün</div></div></div><div class="header-actions"><button class="icon-button">⚙</button><button class="icon-button">↪</button></div></div>
+            <div class="hero"><div class="section-kicker" style="color:#ffd2d5">Bugünün odağı</div><h2>Pazartesi · Üst itiş<br>(Göğüs / Omuz)</h2><p>5 egzersizle bugün gücünü ve hareket kaliteni geliştir.</p><button class="primary">Antrenmanı aç <b>›</b></button><div style="display:flex;align-items:center;gap:8px;margin-top:14px"><div class="progress-line" style="flex:1;background:rgba(255,255,255,.23)"><b style="width:0;background:#fff"></b></div><small style="color:#ffdfe1;font-weight:700">0%</small></div></div>
+            <div class="panel" style="margin-top:12px"><div class="panel-heading"><div><div class="section-kicker">Lumiere yanında</div><strong>Bugün nasıl hissediyorsun?</strong></div><span>✦</span></div><div class="jarvis-input">Lumiere'e bir şey sor...<span class="send">➤</span></div></div>
+            <div class="panel"><div class="panel-heading"><div><div class="section-kicker">Günlük durum</div><strong>Vücudunu dinle.</strong></div><span>Detaylar ›</span></div><div class="stats"><div class="stat"><div class="ring red">0</div><label>Kalori</label><div class="small muted">/ 2200 kcal</div></div><div class="stat"><div class="ring green">0g</div><label>Protein</label><div class="small muted">/ 140g</div></div><div class="stat"><div class="ring">✚</div><label>Antrenman</label><div class="small muted">Hazır</div></div></div></div>
+            <div class="section-kicker" style="margin:17px 2px 8px">Hızlı aksiyonlar</div><div class="quick-grid"><button class="quick green"><span class="quick-icon">▣</span><strong>Yemek analizi</strong><p>Fotoğraftan makro ve kalori</p></button><button class="quick"><span class="quick-icon">◎</span><strong>Video analizi</strong><p>Postür, kas dengesi, hareket</p></button></div>
+            <div class="bottom-nav"><button class="active"><i>◎</i>AKIŞ</button><button><i>◌</i>LUMIERE</button><button><i>□</i>GÜNLÜK</button><button><i>✚</i>ANTRENMAN</button><button><i>⌁</i>MUTFAK</button><button><i>↗</i>GELİŞİM</button></div>
+          </section>
+
+          <section class="phone-screen" data-page="chat"><div class="phone-status"><span>23:19</span><span>▮▮▮ ◉ 100</span></div><div class="phone-header"><div class="brand"><div class="brand-mark">✦</div><div><div class="brand-name">LUMIERE <b>YANINDA</b></div><div class="member-since">Kişisel AI koçun · Hazır</div></div></div><button class="icon-button">⋯</button></div><div style="padding:18px 2px 12px"><div class="section-kicker">Bugünün konuşması</div><h2 class="screen-title">Koçunla <span>konuş.</span></h2></div><div class="chat-bubble">Merhaba. Bugün enerjini, antrenmanını veya beslenmeni birlikte netleştirebiliriz.</div><div class="chat-bubble user">Bugün çok yorgunum, antrenmanı nasıl ayarlayalım?</div><div class="chat-bubble">Yoğunluğu düşürüp tekniğe odaklanalım. İstersen bugünkü programı %20 daha hafif bir varyanta çevirebilirim.</div><div class="panel" style="margin-top:18px"><div class="jarvis-input">Mesajını yaz...<span class="send">➤</span></div><div style="display:flex;gap:6px;margin-top:9px;overflow:hidden"><button class="ghost">Antrenmanı değiştir</button><button class="ghost">Ne yemeliyim?</button></div></div><div class="bottom-nav"><button><i>◎</i>AKIŞ</button><button class="active"><i>◌</i>LUMIERE</button><button><i>□</i>GÜNLÜK</button><button><i>✚</i>ANTRENMAN</button><button><i>⌁</i>MUTFAK</button><button><i>↗</i>GELİŞİM</button></div></section>
+
+          <section class="phone-screen" data-page="daily"><div class="phone-status"><span>23:19</span><span>▮▮▮ ◉ 100</span></div><div class="phone-header"><div><div class="section-kicker">Günlük ritim</div><h2 class="screen-title">Bugünün <span>kaydı.</span></h2></div><button class="icon-button">‹</button></div><div class="panel" style="margin-top:16px"><div class="panel-heading"><strong>31 Ağustos · Pazartesi</strong><span>Bugün</span></div><div class="stats"><div class="stat"><div class="ring red">0</div><label>Kalori</label></div><div class="stat"><div class="ring green">0g</div><label>Protein</label></div><div class="stat"><div class="ring">0</div><label>Su</label></div></div></div><div class="panel"><div class="panel-heading"><strong>Bugün yenenler</strong><span>+ Ekle</span></div><div class="list-row"><div class="list-icon">☼</div><div><strong>Kahvaltı</strong><small>Henüz kayıt yok</small></div><span style="margin-left:auto;color:#676773">›</span></div><div class="list-row"><div class="list-icon">◒</div><div><strong>Öğle</strong><small>Henüz kayıt yok</small></div><span style="margin-left:auto;color:#676773">›</span></div><div class="list-row"><div class="list-icon">◓</div><div><strong>Akşam</strong><small>Henüz kayıt yok</small></div><span style="margin-left:auto;color:#676773">›</span></div></div><div class="panel"><div class="panel-heading"><strong>Günün notu</strong><span>Lumiere</span></div><p class="small muted">Kayıtlarını düzenli tutarsan haftalık önerilerin daha isabetli olur.</p></div><div class="bottom-nav"><button><i>◎</i>AKIŞ</button><button><i>◌</i>LUMIERE</button><button class="active"><i>□</i>GÜNLÜK</button><button><i>✚</i>ANTRENMAN</button><button><i>⌁</i>MUTFAK</button><button><i>↗</i>GELİŞİM</button></div></section>
+
+          <section class="phone-screen" data-page="workout"><div class="phone-status"><span>23:19</span><span>▮▮▮ ◉ 100</span></div><div class="phone-header"><div><div class="section-kicker">Bugünkü seans</div><h2 class="screen-title">Gücünü <span>inşa et.</span></h2></div><button class="icon-button">⋯</button></div><div class="hero" style="margin-top:16px"><div class="section-kicker" style="color:#ffd2d5">Üst itiş · Heavy focus</div><h2>Göğüs, omuz,<br>triceps</h2><p>5 egzersiz · tahmini 52 dakika</p><div style="display:flex;gap:7px"><button class="primary" style="background:#fff;color:#a71f2d">Seansa başla ›</button></div></div><div class="panel"><div class="panel-heading"><strong>Egzersizler</strong><span>0 / 5 tamamlandı</span></div><div class="list-row"><div class="list-icon">1</div><div><strong>Incline Dumbbell Press</strong><small>4 × 6–8 · RIR 2</small></div><span style="margin-left:auto;color:#676773">›</span></div><div class="list-row"><div class="list-icon">2</div><div><strong>Dumbbell Shoulder Press</strong><small>3 × 8–10 · RIR 2</small></div><span style="margin-left:auto;color:#676773">›</span></div><div class="list-row"><div class="list-icon">3</div><div><strong>Incline Dumbbell Fly</strong><small>3 × 10–12 · kontrollü</small></div><span style="margin-left:auto;color:#676773">›</span></div></div><div class="bottom-nav"><button><i>◎</i>AKIŞ</button><button><i>◌</i>LUMIERE</button><button><i>□</i>GÜNLÜK</button><button class="active"><i>✚</i>ANTRENMAN</button><button><i>⌁</i>MUTFAK</button><button><i>↗</i>GELİŞİM</button></div></section>
+
+          <section class="phone-screen" data-page="nutrition"><div class="phone-status"><span>23:19</span><span>▮▮▮ ◉ 100</span></div><div class="phone-header"><div><div class="section-kicker">Beslenme laboratuvarı</div><h2 class="screen-title">Yakıtını <span>akıllı seç.</span></h2></div><button class="icon-button">⋯</button></div><div class="panel" style="margin-top:16px"><div class="panel-heading"><strong>Tabak fotoğrafı ile kaydet</strong><span>✦ AI</span></div><p class="small muted">Fotoğrafı yükle, makroları hesaplayalım; son sözü sen söyle.</p><button class="primary" style="margin-top:10px;background:linear-gradient(135deg,#16c784,#0a9e69)">Fotoğraf yükle ▣</button></div><div class="panel"><div class="panel-heading"><strong>Lumiere'in önerdiği plan</strong><span>Gün 1</span></div><div class="plan-card selected"><div style="display:flex;justify-content:space-between;gap:8px"><strong>Patatesli omlet</strong><small class="muted">10:00</small></div><p class="small muted">4 yumurta, patates ve badem; güne güçlü başlamak için.</p></div><div class="plan-card"><div style="display:flex;justify-content:space-between;gap:8px"><strong>Izgara tavuk bowl</strong><small class="muted">14:00</small></div><p class="small muted">Protein hedefini destekleyen dengeli öğün.</p></div></div><div class="bottom-nav"><button><i>◎</i>AKIŞ</button><button><i>◌</i>LUMIERE</button><button><i>□</i>GÜNLÜK</button><button><i>✚</i>ANTRENMAN</button><button class="active"><i>⌁</i>MUTFAK</button><button><i>↗</i>GELİŞİM</button></div></section>
+
+          <section class="phone-screen" data-page="progress"><div class="phone-status"><span>23:19</span><span>▮▮▮ ◉ 100</span></div><div class="phone-header"><div><div class="section-kicker">Veriye bak</div><h2 class="screen-title">İlerlemeni <span>gör.</span></h2></div><button class="icon-button">⋯</button></div><div class="panel" style="margin-top:16px"><div class="panel-heading"><strong>Kilo trendi</strong><span>Son 8 hafta</span></div><div class="chart"><svg viewBox="0 0 360 135" preserveAspectRatio="none"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ef3340" stop-opacity=".38"/><stop offset="1" stop-color="#ef3340" stop-opacity="0"/></linearGradient></defs><path d="M0 97 C35 90 50 101 78 87 S125 80 150 87 S192 70 220 76 S264 62 292 66 S332 50 360 42 V135 H0Z" fill="url(#fill)"/><path d="M0 97 C35 90 50 101 78 87 S125 80 150 87 S192 70 220 76 S264 62 292 66 S332 50 360 42" fill="none" stroke="#ff6871" stroke-width="3"/></svg></div><div style="display:flex;justify-content:space-between;margin-top:9px"><div><strong style="font-size:21px">72.4 kg</strong><div class="small muted">−1.8 kg · hedefe doğru</div></div><span class="legend"><i class="green"></i> hedef çizgisi</span></div></div><div class="stats" style="margin-top:12px"><div class="stat"><strong style="font-size:18px">8</strong><div class="small muted">kilo kaydı</div></div><div class="stat"><strong style="font-size:18px">12</strong><div class="small muted">antrenman</div></div><div class="stat"><strong style="font-size:18px">86%</strong><div class="small muted">istikrar</div></div></div><div class="panel"><div class="panel-heading"><strong>Son içgörü</strong><span>Lumiere</span></div><p class="small muted">Son iki haftada antrenman devamlılığın yükseldi; aynı ritmi koru.</p></div><div class="bottom-nav"><button><i>◎</i>AKIŞ</button><button><i>◌</i>LUMIERE</button><button><i>□</i>GÜNLÜK</button><button><i>✚</i>ANTRENMAN</button><button><i>⌁</i>MUTFAK</button><button class="active"><i>↗</i>GELİŞİM</button></div></section>
+
+          <section class="phone-screen" data-page="auth"><div style="padding-top:40px;text-align:center"><div class="brand-mark" style="margin:0 auto 15px;width:55px;height:55px;border-radius:18px;font-size:25px">▣</div><div class="section-kicker">Kişisel performans alanın</div><h2 class="screen-title" style="margin-top:8px">LUMIERE <span>COACHING</span></h2><p class="small muted">Koçun, planların ve ilerlemen tek yerde.</p></div><div class="panel" style="margin-top:28px"><div class="form-field"><label>E-posta</label><div class="form-value">ornek@eposta.com</div></div><div class="form-field"><label>Şifre</label><div class="form-value">••••••••</div></div><button class="primary" style="margin-top:16px">Giriş yap ›</button><div style="display:flex;align-items:center;gap:8px;margin:17px 0;color:#555560;font-size:9px"><i style="height:1px;background:#303039;flex:1"></i>VEYA<i style="height:1px;background:#303039;flex:1"></i></div><button class="ghost" style="width:100%">Yeni hesap oluştur</button></div><p class="small muted" style="text-align:center;margin-top:18px">Güvenli bağlantı · verilerin sana ait</p></section>
+
+          <section class="phone-screen" data-page="onboarding"><div class="phone-status"><span>23:19</span><span>▮▮▮ ◉ 100</span></div><div style="padding-top:23px"><div class="section-kicker">Lumiere'a hoş geldin</div><h2 class="screen-title">Hedefine <span>yaklaş.</span></h2><p class="small muted">Seni tanıyıp tamamen sana özel bir yol haritası kuralım.</p><div class="stepper"><b class="on"></b><b class="on"></b><b></b><b></b><b></b><b></b></div><div class="panel"><div class="panel-heading"><strong>Önce seni tanıyalım</strong><span>1 / 5</span></div><div class="form-field"><label>Yaş</label><div class="form-value">28</div></div><div class="form-field"><label>Boy</label><div class="form-value">175 cm</div></div><div class="form-field"><label>Mevcut kilo</label><div class="form-value">74 kg</div></div><button class="primary" style="margin-top:17px">Devam et ›</button></div><div class="panel"><div class="list-row"><div class="list-icon">▣</div><div><strong>Video analizi isteğe bağlı</strong><small>Kamera izni verirsen fizik analizi eklenir.</small></div></div><div class="list-row"><div class="list-icon">◌</div><div><strong>Ses kaydı isteğe bağlı</strong><small>Beslenme tercihlerini daha iyi anlayalım.</small></div></div></div></div></section>
+
+          <section class="phone-screen" data-page="builder"><div class="phone-status"><span>23:19</span><span>▮▮▮ ◉ 100</span></div><div style="padding-top:23px"><div class="section-kicker">Sana özel plan</div><h2 class="screen-title">Programını <span>kur.</span></h2><p class="small muted">Video, ses ve cevaplarını birlikte değerlendirerek iki plan oluşturacağız.</p><div class="stepper"><b class="on"></b><b class="on"></b><b class="on"></b><b class="on"></b><b class="on"></b><b></b></div><div class="plan-card selected"><div style="display:flex;justify-content:space-between"><strong>▣ Antrenman oluşturucu</strong><span style="color:var(--plan-green);font-size:10px">VIDEO BAĞLAMI</span></div><p class="small muted">Hareket kalitesi, eksik kas grupları ve ekipman cevapların temel alınacak.</p><button class="primary" style="margin-top:8px">Anketi aç</button></div><div class="plan-card"><div style="display:flex;justify-content:space-between"><strong>⌁ Beslenme oluşturucu</strong><span style="color:var(--plan-yellow);font-size:10px">SES BAĞLAMI</span></div><p class="small muted">Rutin, damak tadı ve hedeflerine göre günlük planın kurulacak.</p><button class="ghost" style="margin-top:8px;width:100%">Daha sonra</button></div></div></section>
+
+          <section class="phone-screen" data-page="settings"><div class="phone-status"><span>23:19</span><span>▮▮▮ ◉ 100</span></div><div class="phone-header"><div><div class="section-kicker">Hesabın</div><h2 class="screen-title">Ayarlar<span>.</span></h2></div><button class="icon-button">×</button></div><div class="panel" style="margin-top:16px;padding:7px 14px"><div class="list-row"><div class="list-icon">◉</div><div><strong>Profil ve hedefler</strong><small>Boy, kilo, hedef, deneyim</small></div><span style="margin-left:auto">›</span></div><div class="list-row"><div class="list-icon">♧</div><div><strong>Kamera ve mikrofon</strong><small>İzinleri yönet</small></div><span style="margin-left:auto">›</span></div><div class="list-row"><div class="list-icon">⌁</div><div><strong>Bildirimler</strong><small>Hatırlatıcı tercihleri</small></div><span style="margin-left:auto">›</span></div><div class="list-row"><div class="list-icon">⌘</div><div><strong>Gizlilik ve veri</strong><small>KVKK · dışa aktarım</small></div><span style="margin-left:auto">›</span></div></div><button class="ghost" style="width:100%;margin-top:14px;color:#ff858c;border-color:rgba(239,51,64,.24)">Çıkış yap</button></section>
+
+          <section class="phone-screen" data-page="admin"><div class="phone-status"><span>23:19</span><span>▮▮▮ ◉ 100</span></div><div class="phone-header"><div><div class="section-kicker">Lumiere operations</div><h2 class="screen-title">Kontrol <span>merkezi.</span></h2></div><button class="icon-button">×</button></div><div class="stats" style="margin-top:16px"><div class="stat"><strong style="font-size:19px">9</strong><div class="small muted">Kullanıcı</div></div><div class="stat"><strong style="font-size:19px">9</strong><div class="small muted">Aktif</div></div><div class="stat"><strong style="font-size:19px">0</strong><div class="small muted">Bekleyen iş</div></div></div><div class="panel"><div class="panel-heading"><strong>Sistem durumu</strong><span style="color:var(--plan-green)">● canlı</span></div><div class="list-row"><div><strong>PostgreSQL</strong><small>Bağlı · 9 kullanıcı</small></div><span style="margin-left:auto;color:var(--plan-green)">ÇALIŞIYOR</span></div><div class="list-row"><div><strong>Redis / Worker</strong><small>Görev kuyruğu</small></div><span style="margin-left:auto;color:var(--plan-green)">ÇALIŞIYOR</span></div></div><div class="panel"><div class="panel-heading"><strong>Son kullanıcılar</strong><span>25 göster</span></div><div class="list-row"><div class="list-icon">1</div><div><strong>Lumiere Örnek Test</strong><small>lumiere.codex@example.com</small></div></div><div class="list-row"><div class="list-icon">2</div><div><strong>Yeni kullanıcı</strong><small>kullanici@example.com</small></div></div></div></section>
+        </div>
+      </div>
+
+      <aside class="plan-notes" id="planNotes">
+        <div class="notes-title">Ekran karar notu</div>
+        <div class="note-block"><h3 id="noteTitle">Ana akış · odak ve devamlılık</h3><p id="noteSummary">İlk bakışta tek bir ana hedef, hemen altında Lumiere ve üç günlük sinyal. Kullanıcıya “şimdi ne yapmalıyım?” sorusunun cevabını verir.</p></div>
+        <div class="note-block"><h3>Hiyerarşi</h3><ul id="noteList"><li>1 ana aksiyon</li><li>2 yardımcı alan</li><li>tek başparmak erişimi</li></ul></div>
+        <div class="note-block"><h3>Ölçek prensibi</h3><p>Başlıklar tek satırda zorlanmıyor; kartlar 16–24 px ritimle ayrılıyor; alt navigasyon kompakt ve Home Indicator alanını koruyor.</p></div>
+      </aside>
+    </section>
+  </main>
+  <script>
+    const notes = {
+      flow: ['Ana akış · odak ve devamlılık', 'İlk bakışta tek bir ana hedef, hemen altında Lumiere ve üç günlük sinyal. Kullanıcıya “şimdi ne yapmalıyım?” sorusunun cevabını verir.', ['1 ana aksiyon', '2 yardımcı alan', 'tek başparmak erişimi']],
+      chat: ['Lumiere · sakin ve güven veren koç', 'Konuşma ekranında baloncuklar sade; hızlı öneriler alt bölgede, klavye açıldığında input güvenli alanda kalır.', ['mesaj odağı', 'hızlı komutlar', 'net durum']],
+      daily: ['Günlük · tek günün özeti', 'Kalori, protein ve su aynı ölçekte; öğün kaydı liste mantığında. Tarih seçimi başlıkta kalır.', ['özet metrikler', 'öğün listesi', 'günün notu']],
+      workout: ['Antrenman · seansa başla', 'Kullanıcıyı egzersiz kalabalığına boğmadan seans başlatılır; egzersizler ilerleme sırasıyla görünür.', ['seans özeti', 'başlat aksiyonu', 'egzersiz listesi']],
+      nutrition: ['Mutfak · öneriden eyleme', 'Fotoğraf yükleme ilk aksiyon; önerilen öğünler zaman ve makro bağlamıyla taranabilir kartlara dönüşür.', ['fotoğraf aksiyonu', 'önerilen plan', 'öğün kartları']],
+      progress: ['Gelişim · kanıt göster', 'Tek baskın trend grafiği ve üç destek metriği. İçgörü grafiğin altındaki kısa yorumla bağlanır.', ['trend grafiği', 'üç metrik', 'Lumiere içgörüsü']],
+      auth: ['Giriş / kayıt · güven veren ilk temas', 'Kısa form, güçlü kontrast ve iOS klavyesi açıldığında kaymayan dikey akış.', ['logo + vaat', 'kısa form', 'net ikincil aksiyon']],
+      onboarding: ['Onboarding · izin ve güven', 'Adımların toplamı, kamera ve sesin isteğe bağlı olduğu net biçimde anlatılır; hiçbir izin akışı kullanıcıyı kilitlemez.', ['ilerleme göstergesi', 'tek soru grubu', 'şeffaf izin']],
+      builder: ['Program oluşturucu · iki plan, tek karar', 'Video bağlamı antrenmana, ses bağlamı beslenmeye görünür biçimde bağlanır; kullanıcı neyin nasıl kullanıldığını bilir.', ['antrenman bağlamı', 'beslenme bağlamı', 'anket aksiyonu']],
+      settings: ['Ayarlar · iOS listesi hissi', 'Ayarlar ekranı yerel iOS alışkanlıklarına yakın satır düzeninde; her satır yalnızca gerektiğinde alt sayfayı açar.', ['profil', 'izinler', 'gizlilik']],
+      admin: ['Admin · operasyonu tek bakışta gör', 'KPI, servis durumu ve kullanıcılar ayrı katmanlarda; kritik durumlar kırmızı/yeşil sinyallerle okunur.', ['KPI özeti', 'servis sağlığı', 'kullanıcı listesi']]
+    };
+    const root = document.getElementById('lumierePlanning');
+    const buttons = [...root.querySelectorAll('[data-screen]')];
+    const pages = [...root.querySelectorAll('[data-page]')];
+    const title = document.getElementById('noteTitle');
+    const summary = document.getElementById('noteSummary');
+    const list = document.getElementById('noteList');
+    buttons.forEach((button) => button.addEventListener('click', () => {
+      const key = button.dataset.screen;
+      buttons.forEach((item) => item.classList.toggle('is-selected', item === button));
+      pages.forEach((page) => page.classList.toggle('is-active', page.dataset.page === key));
+      const [nextTitle, nextSummary, nextList] = notes[key];
+      title.textContent = nextTitle; summary.textContent = nextSummary; list.innerHTML = nextList.map((item) => `<li>${item}</li>`).join('');
+    }));
+  </script>
+</body>
+</html>

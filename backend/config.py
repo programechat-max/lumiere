@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # Virgülle ayrılmış izinli origin listesi. Boş/"*"=geliştirme modunda tüm origin'lere izin verir.
     ALLOWED_ORIGINS: str = os.getenv(
         "ALLOWED_ORIGINS",
-        "http://localhost:5173,http://localhost:3000,capacitor://localhost,http://localhost",
+        "http://localhost:5173,http://localhost:3000,capacitor://localhost,ionic://localhost,http://localhost",
     )
 
     @property

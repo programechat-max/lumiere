@@ -14,12 +14,14 @@ import logging
 import re
 import time
 import tempfile
+import subprocess
 from datetime import date, timedelta
 
 from dotenv import load_dotenv
 
 import crud
 import schemas
+import models
 import progression
 import jarvis_brain
 from database import SessionLocal
@@ -36,6 +38,10 @@ from genai_client import (
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+
+
+class MediaAnalysisError(RuntimeError):
+    """AI medya sağlayıcısı gerçek analiz üretemediğinde kullanılan hata."""
 
 BASE_PERSONA = """
 Sen kullanıcının kişisel 'Jarvis' adındaki elit, sadık ve zeki fitness/sağlık asistanısın.
@@ -101,6 +107,27 @@ KULLANICI PROFİLİ:
         else:
             memory_block = "\n(Henüz kayıtlı bir hafıza yok - kullanıcıyı tanımaya başlıyorsun.)\n"
 
+        # Onboarding medya sonuçlarını kategoriye göre açıkça ayır. Ham JSON'un
+        # genel hafıza içinde kaybolmasını veya antrenman/beslenme üretiminde
+        # yanlış yorumlanmasını önler.
+        media_sections = []
+        for category, title in (
+            ("onboarding_video_analysis", "ONBOARDING VİDEO ANALİZİ (ANTRENMANDA ÖNCELİKLİ)"),
+            ("onboarding_voice_analysis", "ONBOARDING SES KAYDI ANALİZİ (BESLENMEDE ÖNCELİKLİ)"),
+        ):
+            media_memories = db.query(models.UserMemory).filter(
+                models.UserMemory.user_id == user_id,
+                models.UserMemory.category == category,
+            ).order_by(models.UserMemory.id.desc()).limit(1).all()
+            if media_memories:
+                content = media_memories[0].content or ""
+                try:
+                    content = json.dumps(json.loads(content), ensure_ascii=False)
+                except (TypeError, json.JSONDecodeError):
+                    pass
+                media_sections.append(f"\n═══ {title} ═══\n{content}\n")
+        media_context_block = "".join(media_sections)
+
         meal_plan = crud.get_meal_plan(db, user_id)
         if meal_plan:
             plan_lines = "\n".join(
@@ -112,7 +139,7 @@ KULLANICI PROFİLİ:
         else:
             plan_block = "\n(Kayıtlı bir beslenme planı yok - kullanıcı 'planımdaki X'i yedim' derse plan olmadığını söyle ve ne yediğini sor.)\n"
 
-        return BASE_PERSONA + profile_block + memory_block + plan_block
+        return BASE_PERSONA + profile_block + memory_block + media_context_block + plan_block
     finally:
         if own_session:
             db.close()
@@ -844,7 +871,6 @@ def _nutrition_questionnaire_block(q: dict) -> str:
     )
 
 
-
 def generate_meal_plan(db=None, user_instruction: str = None, save: bool = True, existing_override: list = None, user_id: int = None, questionnaire: dict = None, raise_on_error: bool = False):
     """Profildeki günlük hedeflere (kalori/makro) ve kısıtlamalara (dietary_notes) göre
     tam bir günlük öğün planı üretir. Bu, 'beslenme programı oluşturma' isteğinin karşılığıdır -
@@ -1311,6 +1337,36 @@ def _upload_video_to_gemini(media_bytes: bytes, mime_type: str):
                 pass
 
 
+def _extract_video_frames(media_bytes: bytes, mime_type: str, max_frames: int = 6):
+    """Videoyu Gemini video parser'ına bağımlı bırakmadan temsilci JPEG karelere ayır."""
+    suffix = ".webm" if "webm" in (mime_type or "") else ".mp4"
+    source_path = output_dir = None
+    try:
+        output_dir = tempfile.mkdtemp(prefix="lumiere-video-frames-")
+        source_path = os.path.join(output_dir, f"source{suffix}")
+        with open(source_path, "wb") as source:
+            source.write(media_bytes)
+        # Yaklaşık her 3 saniyede bir kare; kısa videolarda en fazla 6 kare.
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", source_path,
+             "-vf", "fps=1/3,scale=768:-2", "-frames:v", str(max_frames),
+             os.path.join(output_dir, "frame-%02d.jpg")],
+            check=True, timeout=60,
+        )
+        frames = []
+        for name in sorted(os.listdir(output_dir)):
+            if name.endswith(".jpg"):
+                with open(os.path.join(output_dir, name), "rb") as frame:
+                    frames.append({"mime_type": "image/jpeg", "data": frame.read()})
+        if not frames:
+            raise RuntimeError("Videodan görüntü karesi çıkarılamadı.")
+        return frames
+    finally:
+        if output_dir:
+            import shutil
+            shutil.rmtree(output_dir, ignore_errors=True)
+
+
 def analyze_physique_media(media_bytes: bytes, mime_type: str, db=None, user_id: int = None) -> dict:
     """Kullanıcının gönderdiği fizik fotoğrafı/videosunu (veya antrenman formu videosunu)
     analiz eder. Maksimum hipertrofi hedefine yönelik: fizik/form değerlendirmesi +
@@ -1326,9 +1382,10 @@ def analyze_physique_media(media_bytes: bytes, mime_type: str, db=None, user_id:
     if own_session:
         db = SessionLocal()
     uploaded_file = None
+    extracted_frames = []
     try:
         system_instruction = build_system_prompt(db, user_id)
-        model = _GenerativeModel(MODEL_NAME, system_instruction)
+        model = _GenerativeModel(MEDIA_MODEL_NAME, system_instruction)
 
         # 15MB üzerindeki ya da video/* olan her medya önce Files API'yi dener (bkz. yukarı
         # not). Bazı google-generativeai SDK sürümlerinde Files API, sade bir API key ile
@@ -1340,11 +1397,19 @@ def analyze_physique_media(media_bytes: bytes, mime_type: str, db=None, user_id:
         # birkaç MB) için inline gönderime düşüyoruz.
         MAX_INLINE_BYTES = 15 * 1024 * 1024
         is_video = mime_type.startswith("video/")
-        media_part = None
-        if is_video or len(media_bytes) > MAX_INLINE_BYTES:
+        media_parts = []
+        if is_video:
+            # Video modelleri bazı iOS codec'lerinde boş response döndürebiliyor.
+            # Kare tabanlı görsel analiz aynı fizik/form bilgisini daha güvenilir verir.
+            try:
+                extracted_frames = _extract_video_frames(media_bytes, mime_type)
+                media_parts = extracted_frames
+            except Exception as frame_err:
+                logger.warning(f"[AI_CORE] Video karelere ayrılamadı, Files API deneniyor: {frame_err}")
+        if not media_parts and (is_video or len(media_bytes) > MAX_INLINE_BYTES):
             try:
                 uploaded_file = _upload_video_to_gemini(media_bytes, mime_type)
-                media_part = uploaded_file
+                media_parts = [uploaded_file]
             except Exception as upload_err:
                 logger.warning(f"[AI_CORE] Files API başarısız, inline gönderime düşülüyor: {upload_err}")
                 if len(media_bytes) > MAX_INLINE_BYTES:
@@ -1353,8 +1418,8 @@ def analyze_physique_media(media_bytes: bytes, mime_type: str, db=None, user_id:
                         f"({len(media_bytes) / (1024*1024):.1f}MB > {MAX_INLINE_BYTES // (1024*1024)}MB). "
                         "google-generativeai paketini güncelleyip tekrar dener misin?"
                     ) from upload_err
-        if media_part is None:
-            media_part = {"mime_type": mime_type, "data": media_bytes}
+        if not media_parts:
+            media_parts = [{"mime_type": mime_type, "data": media_bytes}]
         prompt = """
 Kullanıcı sana bir fizik fotoğrafı/videosu ya da bir antrenman formu videosu gönderdi.
 Amaç: MAKSİMUM HİPERTROFİ (kas kütlesi artışı) hedefine yönelik elit seviyede bir
@@ -1387,26 +1452,49 @@ SADECE aşağıdaki JSON formatında yanıt ver, başka hiçbir şey yazma:
 }
 """
         response = model.generate_content(
-            [media_part, prompt],
+            [*media_parts, prompt],
             generation_config={"response_mime_type": "application/json", "temperature": 0.4},
         )
-        result = json.loads(response.text)
+        # Gemini bazı video/codec veya güvenlik filtrelerinde HTTP 200 dönüp
+        # `response.text` alanını None bırakabiliyor. Bu durumda aynı içeriği
+        # JSON MIME zorlamadan bir kez daha iste; aksi halde anlamsız bir
+        # `json.loads(None)` hatası kullanıcıya yansıyordu.
+        response_text = getattr(response, "text", None)
+        if not response_text:
+            try:
+                response_text = "".join(
+                    getattr(part, "text", "")
+                    for candidate in (getattr(response, "candidates", None) or [])
+                    for part in (getattr(getattr(candidate, "content", None), "parts", None) or [])
+                ).strip()
+            except Exception:
+                response_text = ""
+        if not response_text:
+            retry_prompt = prompt + "\nJSON çıktısını kesinlikle üret; içeriği değerlendiremiyorsan report alanına bunu açıkça yaz."
+            retry_response = model.generate_content(
+                [*media_parts, retry_prompt],
+                generation_config={"temperature": 0.2},
+            )
+            response_text = getattr(retry_response, "text", None) or ""
+        if not response_text:
+            raise RuntimeError("Gemini videoyu aldı ancak analiz metni döndürmedi (video codec veya güvenlik filtresi).")
+        response_text = response_text.strip()
+        if response_text.startswith("```"):
+            response_text = response_text.strip("`")
+            if response_text.startswith("json"):
+                response_text = response_text[4:].lstrip()
+        result = json.loads(response_text)
 
         if result.get("memory_summary"):
             crud.create_memory(db, category="physique_analysis", content=result["memory_summary"], user_id=user_id)
 
         return result
     except Exception as e:
-        logger.warning(f"[AI_CORE] Gemini video/fizik analizi çağrısı başarısız/anahtar eksik, akıllı analiz motoru devreye girdi: {e}")
-        return {
-            "report": "Efendim, ilettiğiniz video/görsel detaylı olarak incelendi. Göğüs ve omuz kaslarınızın lateral başı belirgin bir aktivasyon ve hipertrofi potansiyeli gösteriyor. Sırt genişliği ve kanat (latissimus) kalınlığını artırmak için dikey çekiş ve göğüs destekli row hareketlerine ağırlık vermenizi öneririm. Tahmini vücut yağ oranınız %13-15 bandında olup, kas kazanımı (lean bulk / recomp) için ideal durumdasınız. Günde 2.0g/kg protein alımı ve 7.5-8 saat kaliteli uyku hipertrofinizi maksimize edecektir.",
-            "memory_summary": "Kullanıcının üst gövde yapısı dengeli, omuz aktivasyonu iyi; sırt ve kanat hipertrofisine öncelik verilmeli. Tahmini yağ oranı %14 civarı.",
-            "training_instruction": "Sırt ve arka omuz hacmini haftalık 2-3 set artır, row hareketlerinde tam esneme (stretch) odağı sağla.",
-            "nutrition_instruction": "Kaloriyi günlük hedefin +150 kcal üzerinde tutarak temiz kas inşasını destekle.",
-            "form_score": 88,
-            "strengths": ["Omuz stabilitesi", "Temiz hareket aralığı (ROM)", "Kontrollü negatif faz"],
-            "improvements": ["Tepe noktada 1 sn statik kasılma", "Bel kavisi kontrolü"],
-        }
+        logger.error(f"[AI_CORE] Gemini video/fizik analizi başarısız: {type(e).__name__}: {e!r}")
+        # Analiz edilemeyen medyayı başarılıymış gibi göstermiyoruz; istemci gerçek
+        # hatayı gösterip yeniden deneme seçeneği sunar. Sabit/uydurma yağ oranı ve
+        # kas değerlendirmesi kullanıcıyı yanıltır ve programa yanlış bağlam taşır.
+        raise MediaAnalysisError("Video analiz servisi şu anda yanıt veremedi. Lütfen tekrar deneyin.") from e
     finally:
         if uploaded_file is not None:
             try:
@@ -1524,7 +1612,7 @@ def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
     intent sistemi (log_food, log_workout, query_history, sohbet vb.) üzerinden işlenir -
     böylece ses ve metin girişleri için ayrı iki mantık yazmak zorunda kalmıyoruz."""
     try:
-        model = _GenerativeModel(MODEL_NAME)
+        model = _GenerativeModel(MEDIA_MODEL_NAME)
         audio_part = {"mime_type": mime_type, "data": audio_bytes}
         prompt = (
             "Bu ses kaydını Türkçe olarak birebir metne dök. Sadece söylenen kelimeleri yaz, "

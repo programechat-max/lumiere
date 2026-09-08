@@ -43,6 +43,25 @@ cd backend && alembic upgrade head               # şema migrasyonu
 Ardından `backend/.env` içine `DATABASE_URL`, `REDIS_URL` vb. tanımlayın (bkz.
 `backend/.env.example`).
 
+## Mac Yerel Sunucu + Operasyon Paneli
+
+Docker Desktop açıkken proje kökünde:
+
+```bash
+export GEMINI_API_KEY="..."
+export JWT_SECRET_KEY="openssl rand -hex 32 çıktısı"
+docker compose up -d --build api postgres redis
+docker compose --profile worker up -d --build
+cd backend && alembic upgrade head
+```
+
+- API: `http://localhost:8000/health` ve bağımlılık kontrolü: `http://localhost:8000/ready`
+- pgAdmin: `http://localhost:5050` (`admin@lumiere.local` / `admin` — ilk çalıştırmada değiştirin)
+- Flower: `http://localhost:5555` (worker profili açıkken)
+- Frontend: `npm run dev`
+
+Admin rolündeki kullanıcılar uygulama başlığındaki **Admin** panelinden KPI, PostgreSQL/Redis durumu ve kullanıcı listesini görebilir. Video analizleri `/api/v1/jobs/onboarding/video` üzerinden kuyruğa alınır; mobil istemci sonucu job durumundan takip eder. Dış erişim için modem portu açmak yerine Tailscale veya Cloudflare Tunnel kullanın.
+
 ## Dokümantasyon Haritası
 
 | Konu | Belge |

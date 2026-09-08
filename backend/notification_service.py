@@ -94,15 +94,17 @@ def dispatch_to_user(db: Session, user_id: int, notification_type: str, title: s
     if not pref_map.get(notification_type, True):
         return {"status": "skipped", "reason": "user_preference_disabled"}
 
-    # Faturalandırma uyarıları kritik olduğundan sessiz saatlerde de gönderilir.
-    if notification_type != "billing" and is_within_quiet_hours(settings_row):
-        return {"status": "skipped", "reason": "quiet_hours"}
-
     devices = db.query(models.UserDeviceToken).filter(
         models.UserDeviceToken.user_id == user_id, models.UserDeviceToken.is_active == True  # noqa: E712
     ).all()
     if not devices:
         return {"status": "skipped", "reason": "no_active_devices"}
+
+    # Cihaz yoksa önce bunu bildir: hem gereksiz sessiz-saat kontrolünü önler
+    # hem de çağıranın gerçek teslimat durumunu doğru görmesini sağlar.
+    # Faturalandırma uyarıları kritik olduğundan sessiz saatlerde de gönderilir.
+    if notification_type != "billing" and is_within_quiet_hours(settings_row):
+        return {"status": "skipped", "reason": "quiet_hours"}
 
     results = []
     for device in devices:

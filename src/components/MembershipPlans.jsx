@@ -29,11 +29,11 @@ const MEMBERSHIP_PLANS = [
     price_usd: 9.99,
     period: 'aylık',
     popular: true,
-    color: 'orange',
+    color: 'red',
     icon: Zap,
-    description: 'Jarvis AI koçu ile hipertrofi hedeflerine hızlı ulaş.',
+    description: 'Lumiere AI koçu ile hipertrofi hedeflerine hızlı ulaş.',
     features: [
-      'Jarvis AI Koç ile 7/24 Kesintisiz Sohbet',
+      'Lumiere AI Koç ile 7/24 Kesintisiz Sohbet',
       'Sınırsız Fotoğraftan Kalori & Makro Analizi',
       'Kişiselleştirilmiş Antrenman & Diyet Planı',
       'Haftalık Otomatik Gelişim Raporları',
@@ -74,7 +74,7 @@ const MEMBERSHIP_PLANS = [
     description: 'En üst düzey VIP deneyim ve öncelikli AI işlemci gücü.',
     features: [
       'Elite\'deki Tüm Özellikler Dahil',
-      '7/24 Öncelikli Ultra Hızlı Jarvis Core Yanıtları',
+      '7/24 Öncelikli Ultra Hızlı Lumiere Core Yanıtları',
       'Birebir Sesli Check-in & Sesli Koçluk Analitiği',
       'VIP Beslenme & Hassas Makro Optimizasyonu',
       'Özel Egzersiz Değişim & Sakatlık Önleme Motoru',
@@ -89,7 +89,7 @@ const MEMBERSHIP_PLANS = [
 const COMPARISON_MATRIX = [
   { feature: 'Temel antrenman & beslenme günlüğü', values: [true, true, true, true] },
   { feature: 'Fotoğraftan kalori & makro hesaplayıcı', values: ['5/gün', 'Sınırsız', 'Sınırsız', 'Sınırsız'] },
-  { feature: 'Jarvis AI koç ile sohbet', values: [false, true, true, 'Öncelikli + Ultra Hızlı'] },
+  { feature: 'Lumiere AI koç ile sohbet', values: [false, true, true, 'Öncelikli + Ultra Hızlı'] },
   { feature: 'Kişiselleştirilmiş antrenman & diyet planı', values: ['Aylık 1', 'Sınırsız', 'Sınırsız', 'VIP optimizasyon'] },
   { feature: 'Haftalık gelişim raporu & grafikler', values: [false, true, true, true] },
   { feature: 'Fotoğraf & videodan hareket form analizi', values: [false, false, true, true] },
@@ -103,7 +103,7 @@ const COMPARISON_MATRIX = [
 
 const PLAN_HEAD_STYLES = [
   'text-neutral-300',
-  'text-orange-400',
+  'text-red-400',
   'text-emerald-400',
   'text-purple-400',
 ];
@@ -178,11 +178,11 @@ export default function MembershipPlans({
   return (
     <div className="w-full space-y-4">
       <div className="text-center max-w-2xl mx-auto space-y-2">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-red-500/10 text-red-400 border border-red-500/20">
           <Sparkles className="w-3.5 h-3.5" /> 4 Farklı Üyelik Seviyesi
         </span>
         <h2 className="text-xl sm:text-2xl font-bold font-mono tracking-tight text-white">
-          Hedefine En Uygun <span className="text-orange-500">Planı Seç</span>
+          Hedefine En Uygun <span className="text-red-500">Planı Seç</span>
         </h2>
         <p className="text-xs sm:text-sm text-neutral-400 font-sans">
           İstediğin zaman planını değiştirebilir veya yükseltebilirsin. Taahhüt yok.
@@ -199,9 +199,9 @@ export default function MembershipPlans({
           const Icon = plan.icon;
 
           const borderStyle = isSelected
-            ? 'border-orange-500 ring-2 ring-orange-500/30 bg-neutral-900/90 shadow-xl shadow-orange-500/10'
+            ? 'border-red-500 ring-2 ring-red-500/30 bg-neutral-900/90 shadow-xl shadow-red-500/10'
             : plan.popular
-            ? 'border-orange-500/40 bg-neutral-900/60 hover:border-orange-500/70'
+            ? 'border-red-500/40 bg-neutral-900/60 hover:border-red-500/70'
             : 'border-neutral-800 bg-neutral-900/40 hover:border-neutral-700';
 
           return (
@@ -211,7 +211,7 @@ export default function MembershipPlans({
               className={`relative rounded-2xl border p-5 flex flex-col justify-between transition-all duration-200 cursor-pointer ${borderStyle}`}
             >
               {plan.popular && (
-                <div className="absolute -top-2 sm:-top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-orange-500 to-amber-500 text-black text-[7px] sm:text-[10px] font-bold font-mono uppercase tracking-widest px-1.5 sm:px-3 py-0.5 rounded-full shadow-md whitespace-nowrap">
+                <div className="absolute -top-2 sm:-top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-red-500 to-amber-500 text-black text-[7px] sm:text-[10px] font-bold font-mono uppercase tracking-widest px-1.5 sm:px-3 py-0.5 rounded-full shadow-md whitespace-nowrap">
                   {plan.badge}
                 </div>
               )}
@@ -220,7 +220,7 @@ export default function MembershipPlans({
                 <div className="flex flex-col items-center gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2 mb-2 sm:mb-3">
                   <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center ${
                     plan.id === 'FREE' ? 'bg-neutral-800 text-neutral-300' :
-                    plan.id === 'PRO' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
+                    plan.id === 'PRO' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
                     plan.id === 'ELITE' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
                     'bg-purple-500/10 text-purple-400 border border-purple-500/20'
                   }`}>
@@ -253,7 +253,7 @@ export default function MembershipPlans({
                     <div key={idx} className="flex items-start gap-2 text-xs text-neutral-300">
                       <Check className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
                         plan.id === 'FREE' ? 'text-neutral-500' :
-                        plan.id === 'PRO' ? 'text-orange-400' :
+                        plan.id === 'PRO' ? 'text-red-400' :
                         plan.id === 'ELITE' ? 'text-emerald-400' : 'text-purple-400'
                       }`} strokeWidth={2.5} />
                       <span className="leading-snug">{feat}</span>
@@ -278,7 +278,7 @@ export default function MembershipPlans({
                     }}
                     className={`w-full py-1.5 sm:py-2.5 px-1 sm:px-3 rounded-lg sm:rounded-xl font-mono text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-md ${
                       isSelected
-                        ? 'bg-orange-500 hover:bg-orange-400 text-black shadow-orange-500/20'
+                        ? 'bg-red-500 hover:bg-red-400 text-white shadow-red-500/20'
                         : 'bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 hover:border-neutral-600'
                     }`}
                   >

@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 import datetime as dt
 from datetime import date
 
@@ -30,7 +31,6 @@ from routes_support import router as support_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-Base.metadata.create_all(bind=engine)
 migrate_schema()
 
 monitoring.init_sentry()
@@ -236,6 +236,9 @@ async def onboarding_analyze_video(file: UploadFile = File(...), current_user: m
 
     try:
         return ai_core.analyze_physique_media(video_bytes, mime_type, db, user_id=current_user.id)
+    except ai_core.MediaAnalysisError as e:
+        logger.error(f"[ONBOARDING] Video AI servisi yanıt vermedi: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         # analyze_physique_media zaten kendi içinde hataları yakalayıp güvenli bir dict
         # döndürüyor; buraya bir şey sızarsa bile bağlantıyı koparmak yerine düzgün bir
@@ -277,15 +280,33 @@ async def onboarding_analyze_voice(file: UploadFile = File(...), current_user: m
 
 
 @app.post("/api/onboarding/complete")
-def onboarding_complete(data: schemas.UserProfileBase, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+def onboarding_complete(data: schemas.OnboardingCompleteRequest, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
     """Onboarding'in son adımı. Formdaki temel bilgileri (yaş/boy/kilo/hedef/deneyim vb.)
     profile yazar ve kurulumu tamamlanmış işaretler. Video/ses analizinden biriken
     UserMemory kayıtları + zenginleşmiş profil, build_system_prompt üzerinden otomatik
     olarak devreye girer - bu yüzden burada ekstra talimat geçmeye gerek yok, AI zaten
     kullanıcıyı 'tanıyarak' antrenman programını ve beslenme planını üretir."""
-    updates = data.model_dump(exclude_unset=True)
+    payload = data.model_dump(exclude_unset=True)
+    video_analysis = payload.pop("video_analysis", None)
+    voice_analysis = payload.pop("voice_analysis", None)
+    updates = payload
     updates["onboarding_completed"] = True
     profile = crud.update_profile(db, updates, current_user.id)
+
+    # Medya sonucu yalnızca React state'inde kalmasın; sonraki oturumlarda da
+    # program üreticisi ve Jarvis aynı somut analiz bağlamını kullanabilsin.
+    if video_analysis:
+        crud.create_memory(
+            db, category="onboarding_video_analysis",
+            content=json.dumps(video_analysis, ensure_ascii=False), importance=9,
+            memory_key=f"onboarding_video_analysis:{current_user.id}", user_id=current_user.id,
+        )
+    if voice_analysis:
+        crud.create_memory(
+            db, category="onboarding_voice_analysis",
+            content=json.dumps(voice_analysis, ensure_ascii=False), importance=8,
+            memory_key=f"onboarding_voice_analysis:{current_user.id}", user_id=current_user.id,
+        )
 
     # Program üretimi ARTIK burada yapılmıyor: onboarding bittikten sonra
     # 'Program Oluşturucu' anketleri (detaylı sorular) cevaplanır ve üretim
@@ -296,6 +317,21 @@ def onboarding_complete(data: schemas.UserProfileBase, current_user: models.User
         "profile": schemas.UserProfileResponse.model_validate(profile),
         "message": "Profil kaydedildi. Programlar, Program Oluşturucu anketlerinden sonra üretilecek.",
     }
+
+
+@app.get("/api/onboarding/context")
+def onboarding_context(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    """Program Oluşturucu için son video/ses analizlerini güvenli biçimde döndürür."""
+    result = {"video_analysis": None, "voice_analysis": None}
+    for category, key in (("onboarding_video_analysis", "video_analysis"), ("onboarding_voice_analysis", "voice_analysis")):
+        memories = crud.get_all_memories(db, category=category, user_id=current_user.id)
+        if not memories:
+            continue
+        try:
+            result[key] = json.loads(memories[0].content)
+        except (TypeError, json.JSONDecodeError):
+            result[key] = {"summary": memories[0].content}
+    return result
 
 
 def _persist_questionnaire_to_profile(db: Session, q: dict, user_id: int):

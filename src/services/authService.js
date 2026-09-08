@@ -73,17 +73,59 @@ async function parseErrorDetail(res, fallback) {
   }
 }
 
+const LOGIN_TIMEOUT_MS = 120_000; // Render free soğuk başlangıç 40-120 sn sürer
+const LOGIN_ATTEMPTS = 3;
+
+// Capacitor (WKWebView) ortamında credentials:'include' cross-origin isteklerde
+// "Load failed" hatasına neden olur. Access token zaten yanıt gövdesinde geliyor,
+// bu yüzden Capacitor'da cookie'ye gerek yok.
+//
+// Sadece window.Capacitor'a bakmak güvenilmez: WKWebView'ın ilk açılışında
+// (ve statik file:// önyüklemesinde) bridging API henüz expose edilmemiş olabilir
+// ve bu durumda credentials:'include' cleartext cross-origin istek "Load failed"
+// verir. Bu yüzden origin protokol'ü (capacitor/ionic/file) da native kabul edilir.
+const isCapacitor = () => {
+  if (typeof window === 'undefined') return false;
+  if (window.Capacitor) return true;
+  const p = window.location?.protocol;
+  return p === 'capacitor:' || p === 'ionic:' || p === 'file:';
+};
+
 export async function login(email, password) {
-  const res = await fetch(`${AUTH_BASE}/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include', // HttpOnly refresh/csrf cookie'lerini almak için ZORUNLU
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) throw new Error(await parseErrorDetail(res, 'Giriş başarısız oldu.'));
-  const data = await res.json();
-  persistSession(data.access_token, data.user);
-  return data.user;
+  const url = `${AUTH_BASE}/login`;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= LOGIN_ATTEMPTS; attempt++) {
+    let res;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // WKWebView'da cross-origin credentials:'include' "Load failed" ile
+          // sonuçlanıyor. Capacitor'da cookie gerekmez, token gövdede gelir.
+          credentials: isCapacitor() ? 'omit' : 'include',
+          signal: controller.signal,
+          body: JSON.stringify({ email, password }),
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (err) {
+      lastErr = err;
+      if (attempt < LOGIN_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 4000)); // soğuk başlangıç için bekle
+        continue;
+      }
+      throw networkDiagError(url, err);
+    }
+    if (!res.ok) throw new Error(await parseErrorDetail(res, 'Giriş başarısız oldu.'));
+    const data = await res.json();
+    persistSession(data.access_token, data.user);
+    return data.user;
+  }
+  throw networkDiagError(url, lastErr);
 }
 
 function networkDiagError(url, err) {
@@ -127,8 +169,9 @@ export async function register(fullName, email, password, preferredPlan = 'FREE'
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           // WKWebView'da cross-origin credentials:'include' "Failed to fetch" ile
-          // sonuclanabiliyor. Access token yanit govdesinde gelir, cookie gerekmez.
-          credentials: 'omit',
+          // sonuçlanabiliyor. Capacitor'da cookie gerekmez, web'de refresh token
+          // cookie'si için 'include' kullanılır.
+          credentials: isCapacitor() ? 'omit' : 'include',
           signal: controller.signal,
           body: JSON.stringify({ full_name: fullName, email, password, preferred_plan: preferredPlan }),
         });
@@ -152,6 +195,12 @@ export async function register(fullName, email, password, preferredPlan = 'FREE'
 }
 
 export async function refreshAccessToken() {
+  // Capacitor'da HttpOnly cookie bulunmaz (credentials:'omit' ile login/register yapılıyor),
+  // bu yüzden cookie tabanlı refresh denemesi anlamsız - sessizce yeniden giriş iste.
+  if (isCapacitor()) {
+    clearSession();
+    throw new Error('Oturum süresi doldu, lütfen tekrar giriş yapın.');
+  }
   const csrfToken = readCookie(CSRF_COOKIE_NAME);
   const res = await fetch(`${AUTH_BASE}/refresh`, {
     method: 'POST',
@@ -175,7 +224,10 @@ export async function refreshAccessToken() {
 
 export async function logout() {
   try {
-    await fetch(`${AUTH_BASE}/logout`, { method: 'POST', credentials: 'include' });
+    await fetch(`${AUTH_BASE}/logout`, {
+      method: 'POST',
+      credentials: isCapacitor() ? 'omit' : 'include',
+    });
   } catch {
     /* çevrimdışı olsa bile yerel oturumu temizle */
   } finally {

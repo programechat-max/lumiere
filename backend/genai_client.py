@@ -24,10 +24,10 @@ def _env_model(name: str, default: str) -> str:
     return val or default
 
 
-MODEL_NAME = _env_model("GEMINI_MODEL", "gemini-2.5-flash")
-MEDIA_MODEL_NAME = _env_model("GEMINI_MEDIA_MODEL", "gemini-2.5-flash")
+MODEL_NAME = _env_model("GEMINI_MODEL", "gemini-3.1-flash-lite")
+MEDIA_MODEL_NAME = _env_model("GEMINI_MEDIA_MODEL", "gemini-3.1-flash-lite")
 # 503/429 (yuksek talep / kota) hatalarinda devreye giren yedek model:
-FALLBACK_MODEL_NAME = _env_model("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash-lite")
+FALLBACK_MODEL_NAME = _env_model("GEMINI_FALLBACK_MODEL", "gemini-3.1-flash-lite")
 
 # Retry ayarlari: gecici API hatalarinda ustel beklemeyle yeniden dener
 _MAX_ATTEMPTS = 3
@@ -73,13 +73,24 @@ class _GenerativeModel:
 
         config = genai_types.GenerateContentConfig(**cfg) if cfg else None
 
+        def normalize_part(item):
+            # Eski google.generativeai biçimindeki medya sözlüklerini yeni
+            # google-genai SDK'sının zorunlu Part nesnesine çevir.
+            if isinstance(item, dict) and "data" in item and "mime_type" in item:
+                return genai_types.Part.from_bytes(data=item["data"], mime_type=item["mime_type"])
+            if isinstance(item, (list, tuple)):
+                return [normalize_part(child) for child in item]
+            return item
+
+        normalized_contents = normalize_part(contents)
+
         # 1) Birincil model ustel beklemeyle denenir (503/429 gibi gecici hatalarda)
         last_exc = None
         for attempt in range(_MAX_ATTEMPTS):
             try:
                 return _genai_client.models.generate_content(
                     model=self.model_name,
-                    contents=contents,
+                    contents=normalized_contents,
                     config=config,
                 )
             except Exception as exc:
@@ -93,7 +104,7 @@ class _GenerativeModel:
             try:
                 return _genai_client.models.generate_content(
                     model=FALLBACK_MODEL_NAME,
-                    contents=contents,
+                    contents=normalized_contents,
                     config=config,
                 )
             except Exception:

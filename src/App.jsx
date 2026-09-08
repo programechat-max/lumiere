@@ -4,8 +4,8 @@ import {
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from 'recharts';
 import {
-  Radar, MessageCircle, Calendar, Dumbbell, UtensilsCrossed, TrendingUp,
-  LogOut, Cpu, Send, Settings,
+  Radar, MessageCircle, Calendar, Dumbbell, UtensilsCrossed, TrendingUp, Activity,
+  LogOut, Cpu, Send, Settings, Square,
 } from 'lucide-react';
 import Login from './Login';
 import Register from './Register';
@@ -13,6 +13,7 @@ import FlowScreen from './components/FlowScreen';
 import SettingsMenu from './components/SettingsMenu';
 import OnboardingWizard from './components/OnboardingWizard';
 import ProgramBuilder from './components/ProgramBuilder';
+import AdminPanel from './components/AdminPanel';
 import { API_BASE } from './config';
 import * as authService from './services/authService';
 
@@ -26,13 +27,6 @@ const DATA_MUTATING_INTENTS = new Set([
 ]);
 
 const PROGRESSION_ICON = { increase_weight: '📈', hold_weight: '⏸️', add_reps: '➕', unknown_range: '❔' };
-const PROGRESSION_COLOR = {
-  increase_weight: 'text-emerald-400',
-  hold_weight: 'text-orange-400',
-  add_reps: 'text-orange-300',
-  unknown_range: 'text-neutral-500',
-};
-
 // Header'da "üyelik başlangıcı"nı gösterirken kullanılır - örn. "15 Ağu 2026'dan beri · 12. gün"
 function formatMemberSince(isoDate) {
   try {
@@ -48,12 +42,24 @@ function formatMemberSince(isoDate) {
 
 const NAV_ITEMS = [
   { key: 'flow', label: 'AKIŞ', Icon: Radar },
-  { key: 'chat', label: 'JARVIS', Icon: MessageCircle },
+  { key: 'chat', label: 'LUMIERE', Icon: MessageCircle },
   { key: 'daily', label: 'GÜNLÜK', Icon: Calendar },
   { key: 'workout', label: 'ANTRENMAN', Icon: Dumbbell },
   { key: 'nutrition', label: 'MUTFAK', Icon: UtensilsCrossed },
   { key: 'progress', label: 'GELİŞİM', Icon: TrendingUp },
 ];
+const NAV_KEYS = NAV_ITEMS.map(({ key }) => key);
+
+// Günlük ekran başlığındaki tarih etiketi - örn. "31 Ağustos Pazartesi"
+function formatDailyDate(iso) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
+  } catch {
+    return iso;
+  }
+}
 
 export default function DashboardMaster() {
   // Kullanıcının programı kullanmaya başladığı tarih (kayıt tarihi) - başlıkta gösterilir.
@@ -74,12 +80,17 @@ export default function DashboardMaster() {
   const [isSetupComplete, setIsSetupComplete] = useState(false);
   // Onboarding bittikten sonra açılan Program Oluşturucu (detaylı anketler) ekranı
   const [showProgramBuilder, setShowProgramBuilder] = useState(false);
+  const [programContext, setProgramContext] = useState(null);
   // Token varsa /api/status doğrulanana kadar "yükleniyor" göstermemiz gerekiyor;
   // aksi halde isSetupComplete henüz bilinmeden (varsayılan false) bir anlığına
   // yanlışlıkla onboarding ekranı gösterilir. Token yoksa zaten login'e düşülüyor.
   const [loading, setLoading] = useState(authService.isAuthenticated());
   const [activeTab, setActiveTab] = useState('flow');
+  const [tabDirection, setTabDirection] = useState(1);
+  const activeTabRef = useRef('flow');
+  const swipeStartRef = useRef(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   // Kamera/mikrofon için kullanıcının kalıcı rıza kararı (/api/status'tan gelir).
   // null => hiç sorulmadı, true => verdi, false => reddetti.
   const [permissions, setPermissions] = useState({ camera: null, microphone: null });
@@ -120,6 +131,55 @@ export default function DashboardMaster() {
   const foodPhotoInputRef = useRef(null);
 
   const [statusError, setStatusError] = useState('');
+  const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes((authService.getStoredUser()?.role || '').toUpperCase());
+
+  const navigateToTab = useCallback((nextTab) => {
+    if (!NAV_KEYS.includes(nextTab)) return;
+    const previousTab = activeTabRef.current;
+    if (previousTab === nextTab) return;
+    const previousIndex = NAV_KEYS.indexOf(previousTab);
+    const nextIndex = NAV_KEYS.indexOf(nextTab);
+    setTabDirection(nextIndex >= previousIndex ? 1 : -1);
+    activeTabRef.current = nextTab;
+    setActiveTab(nextTab);
+  }, []);
+
+  const handleTabTouchStart = useCallback((event) => {
+    if (event.touches.length !== 1) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('button, input, textarea, select, a, [data-no-swipe]')) {
+      swipeStartRef.current = null;
+      return;
+    }
+    const touch = event.touches[0];
+    swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+  }, []);
+
+  const handleTabTouchEnd = useCallback((event) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start || event.changedTouches.length !== 1) return;
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    const elapsed = Date.now() - start.time;
+    if (elapsed > 850 || Math.abs(deltaX) < 56 || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) return;
+
+    const currentIndex = NAV_KEYS.indexOf(activeTabRef.current);
+    const nextIndex = deltaX < 0
+      ? Math.min(currentIndex + 1, NAV_KEYS.length - 1)
+      : Math.max(currentIndex - 1, 0);
+    if (nextIndex !== currentIndex) navigateToTab(NAV_KEYS[nextIndex]);
+  }, [navigateToTab]);
+
+  // Her sekme yeni bir ekran gibi en üstten başlar; özellikle iPhone'da uzun
+  // bir akıştan sonra sekme değiştirilince eski scroll konumu taşınmaz.
+  useEffect(() => {
+    if (!isSetupComplete || showProgramBuilder) return;
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [activeTab, isSetupComplete, showProgramBuilder]);
 
   // Auth helpers (component içinde tanımlanmış)
   const handleLogout = () => {
@@ -363,7 +423,7 @@ export default function DashboardMaster() {
       }
     } catch (err) {
       console.error(err);
-      setChatMessages((prev) => [...prev, { role: 'jarvis', text: 'Bağlantı hatası efendim, backend çalışıyor mu kontrol eder misiniz?' }]);
+      setChatMessages((prev) => [...prev, { role: 'jarvis', text: 'Bağlantı hatası efendim, Lumiere bağlantısını kontrol eder misiniz?' }]);
     } finally {
       setChatSending(false);
     }
@@ -533,13 +593,13 @@ export default function DashboardMaster() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center relative overflow-hidden">
+      <div className="lumiere-app-shell text-white flex min-h-screen flex-col items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0 auth-grid-bg pointer-events-none opacity-60" />
-        <div className="absolute w-72 h-72 rounded-full bg-orange-500/20 blur-3xl auth-glow-orb pointer-events-none" />
+        <div className="absolute w-72 h-72 rounded-full bg-red-500/20 blur-3xl auth-glow-orb pointer-events-none" />
         <div className="relative flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-2 border-neutral-800 border-t-orange-500 rounded-full animate-spin" />
-          <p className="font-mono text-sm tracking-[0.2em] text-neutral-400 uppercase">
-            LUMIERE <span className="text-orange-500">COACHING</span> Başlatılıyor
+          <div className="w-10 h-10 border-2 border-neutral-800 border-t-red-500 rounded-full animate-spin" />
+          <p className="text-sm tracking-[0.16em] text-neutral-400 uppercase font-semibold">
+            LUMIERE <span className="text-red-400">COACHING</span> hazırlanıyor
           </p>
         </div>
       </div>
@@ -551,12 +611,12 @@ export default function DashboardMaster() {
   // ==========================================
   if (statusError) {
     return (
-      <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center relative overflow-hidden p-6 text-center">
+      <div className="lumiere-app-shell text-white flex min-h-screen flex-col items-center justify-center relative overflow-hidden p-6 text-center">
         <div className="absolute inset-0 auth-grid-bg pointer-events-none opacity-60" />
         <p className="font-mono text-sm text-red-400 mb-4 max-w-sm">{statusError}</p>
         <button
           onClick={() => { setLoading(true); setStatusError(''); fetchDashboardData(); }}
-          className="relative bg-orange-500 hover:bg-orange-400 text-black font-bold font-mono text-sm px-5 py-2.5 rounded-lg transition-colors"
+          className="lumiere-primary-button relative rounded-xl px-5 py-3 text-sm font-bold transition-colors"
         >
           Tekrar Dene
         </button>
@@ -577,6 +637,7 @@ export default function DashboardMaster() {
   if (showProgramBuilder) {
     return (
       <ProgramBuilder
+        mediaContext={programContext}
         onFinish={async () => {
           await fetchDashboardData();
           setShowProgramBuilder(false);
@@ -588,7 +649,10 @@ export default function DashboardMaster() {
   if (!isSetupComplete) {
     return (
       <OnboardingWizard
-        onComplete={() => setShowProgramBuilder(true)}
+        onComplete={(context) => {
+          setProgramContext(context || null);
+          setShowProgramBuilder(true);
+        }}
         setCurrentPage={setCurrentPage}
       />
     );
@@ -598,89 +662,109 @@ export default function DashboardMaster() {
   // CANLI DASHBOARD
   // ==========================================
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans antialiased pb-24 md:pb-12">
-      <header
-        className="border-b border-neutral-900 bg-neutral-900/60 backdrop-blur-xl sticky top-0 z-50"
-        style={{ paddingTop: 'env(safe-area-inset-top)' }}
-      >
-        <div className="max-w-7xl mx-auto px-4 py-3.5 flex justify-between items-center">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/30 flex items-center justify-center shrink-0">
-              <Cpu className="w-4 h-4 text-orange-500" strokeWidth={1.75} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-black tracking-wide text-xs sm:text-sm whitespace-nowrap">
-                  LUMIERE <span className="text-orange-500">COACHING</span>
-                </span>
-                <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0" title="Canlı bağlantı" />
+    <div className="lumiere-app-shell app-dashboard text-neutral-100 font-sans antialiased">
+      {activeTab !== 'flow' && (
+        <header
+          className="sticky top-0 z-50 border-b border-white/[0.07] bg-[#111118]/85 backdrop-blur-2xl"
+          style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        >
+          <div className="lp-column px-4">
+            <div className="lp-phone-header">
+              <div className="lp-brand">
+                <div className="lp-brand-mark">
+                  <Square strokeWidth={2.5} style={{ width: 'calc(18px * var(--lp-scale))', height: 'calc(18px * var(--lp-scale))' }} />
+                </div>
+                <div className="min-w-0">
+                  <div className="lp-brand-name">
+                    LUMIERE <b>COACHING</b>
+                  </div>
+                  {memberSince && (
+                    <div className="lp-member-since truncate">{formatMemberSince(memberSince)}</div>
+                  )}
+                </div>
               </div>
-              {memberSince && (
-                <p className="text-[10px] font-mono text-neutral-500 tracking-wide mt-0.5">
-                  {formatMemberSince(memberSince)}
-                </p>
-              )}
+
+              <div className="lp-header-actions">
+                {isAdmin && (
+                  <button
+                    onClick={() => setAdminOpen(true)}
+                    className="lp-icon-button"
+                    aria-label="Admin paneli"
+                  >
+                    <Activity strokeWidth={2} />
+                  </button>
+                )}
+                <button
+                  onClick={() => setSettingsOpen(true)}
+                  className="lp-icon-button"
+                  aria-label="Ayarlar"
+                >
+                  <Settings strokeWidth={2} />
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="lp-icon-button"
+                  aria-label="Çıkış yap"
+                >
+                  <LogOut strokeWidth={2} />
+                </button>
+              </div>
             </div>
           </div>
+        </header>
+      )}
 
-          <div className="flex items-center gap-4">
-            {/* Masaüstü/geniş ekranda yatay sekme menüsü */}
-            <nav className="hidden md:flex bg-neutral-950 p-1 rounded-xl border border-neutral-800">
-              {NAV_ITEMS.map(({ key, label, Icon }) => (
-                <button
-                  key={key}
-                  onClick={() => setActiveTab(key)}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-mono transition-all ${activeTab === key ? 'bg-orange-500 text-black font-bold' : 'text-neutral-400 hover:text-white'}`}
-                >
-                  <Icon className="w-3.5 h-3.5" strokeWidth={2} />
-                  {label}
-                </button>
-              ))}
-            </nav>
+      {/* Native app tarzı alt sekme çubuğu - mockup ölçülerinde, tüm ekran boyutlarında */}
+      <nav className="lp-bottom-nav" aria-label="Sekmeler">
+        {NAV_ITEMS.map(({ key, label }) => {
+          const isActive = activeTab === key;
+          return (
             <button
-              onClick={() => setSettingsOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-mono text-neutral-400 hover:text-white border border-neutral-800 hover:border-orange-500/40 transition-all"
-              aria-label="Ayarlar"
+              key={key}
+              onClick={() => navigateToTab(key)}
+              className={isActive ? 'active' : ''}
+              aria-current={isActive ? 'page' : undefined}
             >
-              <Settings className="w-3.5 h-3.5" strokeWidth={2} />
-              <span className="hidden sm:inline">Ayarlar</span>
+              <span className="lp-nav-icon">
+                {key === 'flow' && (
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="12" cy="12" r="9" />
+                    <circle cx="12" cy="12" r="5" />
+                    <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                  </svg>
+                )}
+                {key === 'chat' && (
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <circle cx="12" cy="12" r="6" />
+                  </svg>
+                )}
+                {key === 'daily' && (
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                  </svg>
+                )}
+                {key === 'workout' && (
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                )}
+                {key === 'nutrition' && (
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                )}
+                {key === 'progress' && (
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="7" y1="17" x2="17" y2="7" />
+                    <polyline points="7 7 17 7 17 17" />
+                  </svg>
+                )}
+              </span>
+              {label}
             </button>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-mono text-neutral-400 hover:text-red-400 border border-neutral-800 hover:border-red-500/40 transition-all"
-            >
-              <LogOut className="w-3.5 h-3.5" strokeWidth={2} />
-              <span className="hidden sm:inline">Çıkış</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Mobilde native app tarzı alt sekme çubuğu - aktif sekme yuvarlak "pill" vurgusuyla belirtilir */}
-      <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-neutral-900/95 backdrop-blur-xl border-t border-neutral-800"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
-        <div className="flex justify-between px-1.5 py-1.5">
-          {NAV_ITEMS.map(({ key, label, Icon }) => {
-            const isActive = activeTab === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                className="flex-1 flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl transition-transform active:scale-95"
-                aria-current={isActive ? 'page' : undefined}
-              >
-                <span className={`flex items-center justify-center w-10 h-7 rounded-full transition-colors duration-200 ${isActive ? 'bg-orange-500/15' : ''}`}>
-                  <Icon className={`w-5 h-5 transition-colors duration-200 ${isActive ? 'text-orange-500' : 'text-neutral-500'}`} strokeWidth={isActive ? 2.25 : 1.75} />
-                </span>
-                <span className={`text-[9px] font-mono tracking-tight transition-colors duration-200 ${isActive ? 'text-orange-500 font-bold' : 'text-neutral-500'}`}>
-                  {label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+          );
+        })}
       </nav>
 
       <SettingsMenu
@@ -690,19 +774,26 @@ export default function DashboardMaster() {
         permissions={permissions}
         onPermissionsChanged={fetchDashboardData}
       />
+      <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} />
 
-      <main className="max-w-7xl mx-auto px-4 mt-8 space-y-8 relative">
+      <main
+        className="lp-main tab-swipe-surface lp-column px-4 mt-4 space-y-4 relative"
+        onTouchStart={handleTabTouchStart}
+        onTouchEnd={handleTabTouchEnd}
+      >
+        <div key={activeTab} className={`page-transition page-transition-${tabDirection > 0 ? 'next' : 'prev'}`}>
 
         {activeTab === 'flow' && (
           <FlowScreen
             profile={profile}
             workout={workout}
             nutritionPlans={nutritionPlans}
-            metrics={metrics}
-            insights={insights}
             onQuickAction={handleQuickAction}
-            onNavigateTab={setActiveTab}
+            onNavigateTab={navigateToTab}
             onSetChatMessage={setChatInput}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onLogout={handleLogout}
+            memberSinceLabel={formatMemberSince(memberSince)}
           />
         )}
 
@@ -718,89 +809,117 @@ export default function DashboardMaster() {
         )}
 
         {activeTab === 'daily' && (
-          <div className="space-y-6 animate-fadeIn">
+          <div className="space-y-3 animate-fadeIn">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xl font-black font-mono tracking-tight text-orange-500">// GÜNLÜK PENCERE</h2>
+              <div>
+                <p className="lp-section-kicker">Günlük ritim</p>
+                <h2 className="lp-screen-title">Bugünün <span>kaydı.</span></h2>
+              </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => shiftSelectedDate(-1)}
-                  className="bg-neutral-900 border border-neutral-800 text-neutral-300 w-8 h-8 rounded-lg hover:bg-neutral-800">‹</button>
+                  className="lp-icon-button" aria-label="Önceki gün">‹</button>
                 <input
                   type="date" value={selectedDate} max={new Date().toISOString().split('T')[0]}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-1.5 text-sm font-mono text-neutral-200 focus:outline-none focus:border-orange-500"
+                  className="bg-[#121219] border border-white/10 rounded-xl px-2 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-red-500"
                 />
                 <button onClick={() => shiftSelectedDate(1)} disabled={selectedDate >= new Date().toISOString().split('T')[0]}
-                  className="bg-neutral-900 border border-neutral-800 text-neutral-300 w-8 h-8 rounded-lg hover:bg-neutral-800 disabled:opacity-30">›</button>
+                  className="lp-icon-button disabled:opacity-30" aria-label="Sonraki gün">›</button>
               </div>
             </div>
 
             {loadingDaily ? (
-              <p className="text-sm text-neutral-600 font-mono">Yükleniyor...</p>
+              <p className="lp-small lp-muted">Yükleniyor...</p>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-                  <h3 className="text-xs font-mono uppercase text-neutral-400 tracking-wider">🍽️ O Gün Yenenler</h3>
+              <div className="space-y-3">
+                {dailyNutrition && (
+                  <div className="lp-panel">
+                    <div className="lp-panel-heading">
+                      <strong>{formatDailyDate(selectedDate)}</strong>
+                      <span>{selectedDate === new Date().toISOString().split('T')[0] ? 'Bugün' : 'Arşiv'}</span>
+                    </div>
+                    <div className="lp-stats">
+                      <div className="lp-stat">
+                        <div className="lp-ring red">{Math.round(dailyNutrition.summary.calories)}</div>
+                        <label>Kalori</label>
+                        <div className="lp-small lp-muted">/ {profile?.daily_calorie_target || 2200} kcal</div>
+                      </div>
+                      <div className="lp-stat">
+                        <div className="lp-ring green">{Math.round(dailyNutrition.summary.protein)}g</div>
+                        <label>Protein</label>
+                        <div className="lp-small lp-muted">/ {profile?.daily_protein_target || 140}g</div>
+                      </div>
+                      <div className="lp-stat">
+                        <div className="lp-ring">{dailyWorkout?.total_sets || 0}</div>
+                        <label>Set</label>
+                        <div className="lp-small lp-muted">antrenman</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="lp-panel">
+                  <div className="lp-panel-heading"><strong>Bugün yenenler</strong><span>{dailyNutrition?.meals?.length || 0} kayıt</span></div>
                   {dailyNutrition && dailyNutrition.meals && dailyNutrition.meals.length > 0 ? (
-                    <>
-                      <div className="flex gap-4 text-xs font-mono text-neutral-400">
-                        <span>{dailyNutrition.summary.calories.toFixed(0)} kcal</span>
-                        <span>{dailyNutrition.summary.protein.toFixed(0)}g protein</span>
-                        <span>{dailyNutrition.summary.carbs.toFixed(0)}g karb</span>
-                        <span>{dailyNutrition.summary.fats.toFixed(0)}g yağ</span>
-                      </div>
-                      <div className="space-y-2">
-                        {dailyNutrition.meals.map((m) => (
-                          <div key={m.id} className="p-3 bg-neutral-950 border border-neutral-800 rounded-xl">
-                            <p className="text-sm font-bold">{m.meal_name}</p>
-                            <p className="text-xs text-neutral-500">{m.ingredients}</p>
-                            <span className="text-[10px] font-mono text-emerald-400">{m.calories.toFixed(0)} kcal | {m.protein.toFixed(0)}g P</span>
+                    <div>
+                      {dailyNutrition.meals.map((m) => (
+                        <div key={m.id} className="lp-list-row">
+                          <div className="lp-list-icon">☼</div>
+                          <div>
+                            <strong>{m.meal_name}</strong>
+                            <small className="line-clamp-1 block">{m.ingredients}</small>
                           </div>
-                        ))}
-                      </div>
-                    </>
+                          <span className="lp-chev lp-small lp-muted">{m.calories.toFixed(0)} kcal · {m.protein.toFixed(0)}g P</span>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
-                    <p className="text-sm text-neutral-600 font-mono">Bu gün için beslenme kaydı yok.</p>
+                    <p className="lp-small lp-muted">Bu gün için beslenme kaydı yok.</p>
                   )}
                 </div>
 
-                <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-                  <h3 className="text-xs font-mono uppercase text-neutral-400 tracking-wider">🏋️ O Gün Yapılan Antrenman</h3>
+                <div className="lp-panel">
+                  <div className="lp-panel-heading"><strong>O gün yapılan antrenman</strong><span>{dailyWorkout?.total_sets || 0} set</span></div>
                   {dailyWorkout && dailyWorkout.logs && dailyWorkout.logs.length > 0 ? (
-                    <>
-                      <p className="text-xs font-mono text-neutral-400">{dailyWorkout.total_sets} set</p>
-                      <div className="space-y-2">
-                        {dailyWorkout.logs.map((l, i) => (
-                          <div key={i} className="flex justify-between p-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm">
-                            <span>{l.exercise_name} — Set {l.set_number}</span>
-                            <span className="font-mono text-orange-400">{l.weight_lifted}kg x {l.reps_done}{l.rpe ? ` (RPE ${l.rpe})` : ''}</span>
+                    <div>
+                      {dailyWorkout.logs.map((l, i) => (
+                        <div key={i} className="lp-list-row">
+                          <div className="lp-list-icon">{i + 1}</div>
+                          <div>
+                            <strong>{l.exercise_name}</strong>
+                            <small>Set {l.set_number}</small>
                           </div>
-                        ))}
-                      </div>
-                    </>
+                          <span className="lp-chev lp-small" style={{ color: 'var(--lp-red-2)' }}>{l.weight_lifted}kg × {l.reps_done}{l.rpe ? ` · RPE ${l.rpe}` : ''}</span>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
-                    <p className="text-sm text-neutral-600 font-mono">Bu gün için antrenman kaydı yok.</p>
+                    <p className="lp-small lp-muted">Bu gün için antrenman kaydı yok.</p>
                   )}
                 </div>
-              </div>
-            )}
 
-            {!loadingDaily && Object.keys(dailyHeatmap).length > 0 && (
-              <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl">
-                <h3 className="text-xs font-mono uppercase text-neutral-400 tracking-wider mb-4">🔥 O Günün Kas Isı Haritası</h3>
-                <MuscleHeatmap data={dailyHeatmap} />
+                {!loadingDaily && Object.keys(dailyHeatmap).length > 0 && (
+                  <div className="lp-panel">
+                    <div className="lp-panel-heading"><strong>Kas ısı haritası</strong><span>🔥</span></div>
+                    <MuscleHeatmap data={dailyHeatmap} />
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
 
         {activeTab === 'workout' && (
-          <div className="space-y-6 animate-fadeIn">
-            <h2 className="text-xl font-black font-mono tracking-tight text-orange-500">// GÜNÜN HİPERTROFİ REÇETESİ</h2>
+          <div className="space-y-3 animate-fadeIn">
+            <div>
+              <p className="lp-section-kicker">Bugünkü seans</p>
+              <h2 className="lp-screen-title">Gücünü <span>inşa et.</span></h2>
+            </div>
 
             {deloadStatus && deloadStatus.needs_deload && (
-              <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-2xl">
-                <p className="text-sm font-bold text-orange-400">⚠️ Deload Haftası Önerisi</p>
-                <p className="text-xs text-neutral-400 mt-1">
+              <div className="lp-panel" style={{ borderColor: 'rgba(239,51,64,.35)', background: 'rgba(239,51,64,.08)' }}>
+                <p className="text-sm font-bold" style={{ color: 'var(--lp-red-2)' }}>⚠️ Deload Haftası Önerisi</p>
+                <p className="lp-small lp-muted mt-1">
                   Son antrenmanlarda durağanlık veya yüksek yorgunluk tespit edildi. Bu hafta
                   ağırlıkları %40-50 azaltıp toparlanmayı önceliklendirmeyi düşün.
                 </p>
@@ -808,95 +927,94 @@ export default function DashboardMaster() {
             )}
 
             {(!workout.programs || workout.programs.length === 0) ? (
-              <div className="p-8 bg-neutral-900 border border-neutral-800 border-dashed rounded-2xl text-center space-y-4">
-                <p className="text-neutral-500 font-mono text-sm">
-                  🏃‍♂️ Henüz aktif bir program yok.
-                </p>
-                <p className="text-[11px] text-neutral-600 font-mono">
-                  AI üretimi 1-2 dakika sürebilir — butona bastıktan sonra beklemede kal.
-                </p>
+              <div className="lp-panel text-center space-y-3" style={{ borderStyle: 'dashed' }}>
+                <p className="lp-small lp-muted">🏃‍♂️ Henüz aktif bir program yok.</p>
+                <p className="lp-small lp-muted">AI üretimi 1-2 dakika sürebilir — butona bastıktan sonra beklemede kal.</p>
                 {workoutError && (
-                  <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                  <p className="lp-small px-3 py-2 rounded-xl" style={{ color: 'var(--lp-red-2)', background: 'rgba(239,51,64,.1)', border: '1px solid rgba(239,51,64,.3)' }}>
                     {workoutError}
                   </p>
                 )}
-                <button onClick={generateWorkoutProgram} disabled={generatingProgram}
-                  className="bg-orange-500 text-black text-xs font-bold px-5 py-2.5 rounded-lg disabled:opacity-50">
+                <button onClick={generateWorkoutProgram} disabled={generatingProgram} className="lp-primary">
                   {generatingProgram ? 'OLUŞTURULUYOR (1-2 DK SÜREBİLİR)...' : 'PROFİLİME GÖRE PROGRAM OLUŞTUR'}
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
-                {workout.programs.map((program) => (
-                  <div key={program.id} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-bold text-lg">{program.day_name}</h3>
-                      {program.focus && (
-                        <span className="text-[10px] font-mono text-orange-500/80 bg-orange-500/10 px-2 py-1 rounded">
-                          {program.focus.replace(/_/g, ' ').toUpperCase()}
-                        </span>
-                      )}
+              (() => {
+              const dayNames = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+              const todayName = dayNames[new Date().getDay()];
+              const activeProg = workout.programs?.find((p) =>
+                p.day_name?.toLocaleLowerCase('tr-TR').includes(todayName.toLocaleLowerCase('tr-TR'))
+              ) || workout.programs?.[0];
+              const exCount = activeProg?.exercises?.length || 0;
+              const doneCount = workout.today_logs?.length || 0;
+              const focusName = activeProg?.focus ? activeProg.focus.replace(/_/g, ' ') : 'Heavy focus';
+
+              return activeProg ? (
+                <>
+                  <div className="lp-hero" style={{ marginTop: 'calc(16px * var(--lp-scale))' }}>
+                    <div className="lp-section-kicker" style={{ color: '#ffd2d5' }}>
+                      {activeProg.day_name} · {focusName}
                     </div>
-                    <div className="space-y-2">
-                      {program.exercises.map((ex) => (
-                        <div key={ex.id} className="p-4 bg-neutral-950 border border-neutral-800 rounded-xl text-sm space-y-2">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium text-white">{ex.name}</span>
-                                {ex.exercise_type && (
-                                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700">
-                                    {ex.exercise_type.replace(/_/g, ' ').toUpperCase()}
-                                  </span>
-                                )}
-                                {ex.stretch_mediated && (
-                                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                    🎯 STRETCH
-                                  </span>
-                                )}
-                                {ex.unilateral && (
-                                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                                    ⚖️ UNI
-                                  </span>
-                                )}
-                              </div>
-                              {ex.technique_cue && (
-                                <p className="text-[11px] text-orange-400/90 mt-1 font-mono italic">💡 {ex.technique_cue}</p>
-                              )}
-                            </div>
-                            <div className="flex flex-col items-end gap-1 shrink-0">
-                              <span className="font-mono text-xs text-neutral-300">
-                                {ex.target_sets} set × {ex.target_reps}
-                                {ex.target_rpe && <span className="text-orange-400"> @RPE{ex.target_rpe}</span>}
-                              </span>
-                              {ex.equipment && (
-                                <span className="text-[9px] font-mono text-neutral-500">{ex.equipment.toUpperCase()}</span>
-                              )}
-                            </div>
+                    <h2>
+                      {activeProg.focus
+                        ? activeProg.focus.replace(/_/g, ', ')
+                        : 'Göğüs, omuz, triceps'}
+                    </h2>
+                    <p>{exCount} egzersiz · tahmini {Math.max(exCount * 7, 20)} dakika</p>
+                    <div style={{ display: 'flex', gap: 'calc(7px * var(--lp-scale))' }}>
+                      <button
+                        type="button"
+                        className="lp-primary"
+                        style={{ background: '#fff', color: '#a71f2d', fontWeight: 900 }}
+                      >
+                        Seansa başla ›
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="lp-panel">
+                    <div className="lp-panel-heading">
+                      <strong>Egzersizler</strong>
+                      <span className="lp-muted font-mono">{doneCount} / {exCount} tamamlandı</span>
+                    </div>
+                    <div>
+                      {activeProg.exercises.map((ex, idx) => (
+                        <div key={ex.id} className="lp-list-row">
+                          <div className="lp-list-icon">{idx + 1}</div>
+                          <div>
+                            <strong>{ex.name}</strong>
+                            <small>
+                              {ex.target_sets} × {ex.target_reps}{ex.target_rpe ? ` · RIR ${Math.max(0, 10 - ex.target_rpe)}` : ' · RIR 2'}
+                              {ex.equipment ? ` · ${ex.equipment}` : ''}
+                            </small>
+                            {ex.technique_cue && (
+                              <small className="block" style={{ color: 'var(--lp-red-2)' }}>💡 {ex.technique_cue}</small>
+                            )}
                           </div>
-                          {ex.progression && ex.progression.status !== 'no_data' && (
-                            <p className={`text-xs font-mono ${PROGRESSION_COLOR[ex.progression.status] || 'text-neutral-500'}`}>
-                              {PROGRESSION_ICON[ex.progression.status] || '•'} {ex.progression.message}
-                            </p>
-                          )}
+                          <span className="lp-chev">›</span>
                         </div>
                       ))}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                </>
+              ) : null;
+            })())}
 
-            <div>
-              <h3 className="font-mono text-xs uppercase tracking-wider text-neutral-400 mb-3">Bugün Kaydedilen Setler</h3>
+            <div className="lp-panel">
+              <div className="lp-panel-heading"><strong>Bugün kaydedilen setler</strong><span>{workout.today_logs?.length || 0} set</span></div>
               {(!workout.today_logs || workout.today_logs.length === 0) ? (
-                <p className="text-sm text-neutral-600 font-mono">Bugün henüz set girilmedi.</p>
+                <p className="lp-small lp-muted">Bugün henüz set girilmedi.</p>
               ) : (
-                <div className="space-y-2">
+                <div>
                   {workout.today_logs.map((log, i) => (
-                    <div key={i} className="flex justify-between p-3 bg-neutral-900 border border-neutral-800 rounded-xl text-sm">
-                      <span>{log.exercise_name} — Set {log.set_number}</span>
-                      <span className="font-mono text-emerald-400">{log.weight_lifted}kg x {log.reps_done}</span>
+                    <div key={i} className="lp-list-row">
+                      <div className="lp-list-icon">{i + 1}</div>
+                      <div>
+                        <strong>{log.exercise_name}</strong>
+                        <small>Set {log.set_number}</small>
+                      </div>
+                      <span className="lp-chev lp-small" style={{ color: 'var(--lp-green)' }}>{log.weight_lifted}kg × {log.reps_done}</span>
                     </div>
                   ))}
                 </div>
@@ -906,8 +1024,11 @@ export default function DashboardMaster() {
         )}
 
         {activeTab === 'nutrition' && (
-          <div className="space-y-6 animate-fadeIn">
-            <h2 className="text-xl font-black font-mono tracking-tight text-emerald-500">// ANABOLİK MUTFAK VE MAKROLAR</h2>
+          <div className="space-y-3 animate-fadeIn">
+            <div>
+              <p className="lp-section-kicker">Beslenme laboratuvarı</p>
+              <h2 className="lp-screen-title">Yakıtını <span>akıllı seç.</span></h2>
+            </div>
 
             <FoodPhotoUpload
               preview={foodPhotoPreview}
@@ -919,35 +1040,35 @@ export default function DashboardMaster() {
               onCancel={() => { setFoodPhotoPreview(null); setFoodPhotoError(''); }}
             />
 
-            <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-mono uppercase text-neutral-400 tracking-wider">📋 Jarvis'in Önerdiği Plan (Henüz Yenmedi)</h3>
-                <div className="flex gap-2">
-                  {mealPlan.length > 0 && (
-                    <button onClick={deleteMealPlan}
-                      className="bg-neutral-800 text-neutral-300 text-xs font-bold px-4 py-2 rounded-lg hover:bg-neutral-700">
-                      KALDIR
-                    </button>
-                  )}
-                  <button onClick={regenerateMealPlan} disabled={generatingPlan}
-                    className="bg-emerald-500 text-black text-xs font-bold px-4 py-2 rounded-lg disabled:opacity-50">
-                    {generatingPlan ? 'OLUŞTURULUYOR...' : 'YENİ PLAN OLUŞTUR'}
+            <div className="lp-panel">
+              <div className="lp-panel-heading">
+                <strong>Lumiere'in önerdiği plan</strong>
+                <span>{mealPlan.length > 0 ? `${mealPlan.length} öğün` : 'Henüz yok'}</span>
+              </div>
+              <div className="flex gap-2 mb-3">
+                {mealPlan.length > 0 && (
+                  <button onClick={deleteMealPlan}
+                    className="lp-ghost" style={{ color: '#ff858c', borderColor: 'rgba(239,51,64,.24)' }}>
+                    KALDIR
                   </button>
-                </div>
+                )}
+                <button onClick={regenerateMealPlan} disabled={generatingPlan} className="lp-primary">
+                  {generatingPlan ? 'OLUŞTURULUYOR...' : 'YENİ PLAN OLUŞTUR'}
+                </button>
               </div>
               {mealPlan.length === 0 ? (
-                <p className="text-sm text-neutral-600 font-mono">Henüz bir plan yok. Telegram'da /beslenme yaz veya yukarıdaki butona bas.</p>
+                <p className="lp-small lp-muted">Henüz bir plan yok. Telegram'da /beslenme yaz veya yukarıdaki butona bas.</p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
                   {mealPlan.map((item) => (
-                    <div key={item.id} className="p-4 bg-neutral-950 border border-neutral-800 rounded-xl">
-                      <div className="flex justify-between items-baseline">
-                        <h4 className="text-sm font-bold text-white">{item.meal_name}</h4>
-                        <span className="text-[10px] font-mono text-neutral-500">{item.time_target}</span>
+                    <div key={item.id} className="lp-plan-card">
+                      <div className="flex justify-between gap-2 items-baseline">
+                        <strong className="text-sm">{item.meal_name}</strong>
+                        <small className="lp-muted">{item.time_target}</small>
                       </div>
-                      <p className="text-xs text-neutral-400 mt-1">{item.description}</p>
-                      <span className="text-[10px] font-mono text-emerald-400 block mt-2">
-                        {item.calories.toFixed(0)} kcal | P:{item.protein.toFixed(0)}g | K:{item.carbs.toFixed(0)}g | Y:{item.fats.toFixed(0)}g
+                      <p className="lp-small lp-muted">{item.description}</p>
+                      <span className="lp-small block mt-1" style={{ color: 'var(--lp-green)' }}>
+                        {item.calories.toFixed(0)} kcal · P:{item.protein.toFixed(0)}g · K:{item.carbs.toFixed(0)}g · Y:{item.fats.toFixed(0)}g
                       </span>
                     </div>
                   ))}
@@ -955,57 +1076,123 @@ export default function DashboardMaster() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lp-panel">
+              <div className="lp-panel-heading"><strong>Bugünkü ilerleme</strong><span>halka</span></div>
+              <div className="relative flex items-center justify-center my-2">
+                <svg className="w-32 h-32 transform -rotate-90">
+                  <circle cx="80" cy="80" r="50" className="text-neutral-800" strokeWidth="10" fill="transparent" />
+                  <circle cx="80" cy="80" r="50" className="text-emerald-500 transition-all duration-500" strokeWidth="10" strokeDasharray={2 * Math.PI * 50} strokeDashoffset={dashOffset} strokeLinecap="round" fill="transparent" />
+                </svg>
+                <div className="absolute text-center">
+                  <span className="text-2xl font-black block">{consumedCalories.toFixed(0)}</span>
+                  <span className="lp-small lp-muted uppercase">/ {targetCalories.toFixed(0)} kcal</span>
+                </div>
+              </div>
+              <div className="space-y-3 mt-4">
+                <MacroBar label="PROTEİN" value={consumedProtein} target={targetProtein} color="bg-emerald-500" />
+                <MacroBar label="KARBONHİDRAT" value={consumedCarbs} target={targetCarbs} color="bg-red-500" />
+              </div>
+            </div>
 
-              <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl flex flex-col justify-between">
+            <div className="lp-panel">
+              <div className="lp-panel-heading"><strong>Bugün gerçekten yediklerin</strong><span>{nutritionPlans.length} kayıt</span></div>
+              {nutritionPlans.length === 0 ? (
+                <p className="lp-small lp-muted">Bugün henüz öğün girilmedi.</p>
+              ) : (
                 <div>
-                  <h3 className="text-xs font-mono uppercase text-neutral-400 tracking-wider mb-6 text-center">Bugünkü İlerleme</h3>
-                  <div className="relative flex items-center justify-center my-4">
-                    <svg className="w-40 h-40 transform -rotate-90">
-                      <circle cx="80" cy="80" r="50" className="text-neutral-800" strokeWidth="10" fill="transparent" />
-                      <circle cx="80" cy="80" r="50" className="text-emerald-500 transition-all duration-500" strokeWidth="10" strokeDasharray={2 * Math.PI * 50} strokeDashoffset={dashOffset} strokeLinecap="round" fill="transparent" />
-                    </svg>
-                    <div className="absolute text-center">
-                      <span className="text-2xl font-black block">{consumedCalories.toFixed(0)}</span>
-                      <span className="text-[10px] font-mono text-neutral-500 uppercase">/ {targetCalories.toFixed(0)} kcal</span>
+                  {nutritionPlans.map((plan) => (
+                    <div key={plan.id} className="lp-list-row">
+                      <div className="lp-list-icon">▣</div>
+                      <div>
+                        <strong>{plan.meal_name} {plan.time_target ? `(${plan.time_target})` : ''}</strong>
+                        <small className="line-clamp-1 block">{plan.ingredients}</small>
+                      </div>
+                      <span className="lp-chev lp-small" style={{ color: 'var(--lp-green)' }}>
+                        {plan.calories.toFixed(0)} kcal · P:{plan.target_protein}g
+                      </span>
                     </div>
-                  </div>
+                  ))}
                 </div>
-                <div className="space-y-3 mt-6 font-mono text-xs">
-                  <MacroBar label="PROTEİN" value={consumedProtein} target={targetProtein} color="bg-emerald-500" />
-                  <MacroBar label="KARBONHİDRAT" value={consumedCarbs} target={targetCarbs} color="bg-orange-500" />
-                </div>
-              </div>
-
-              <div className="lg:col-span-2 space-y-4">
-                <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-                  <h3 className="font-mono text-xs uppercase tracking-wider text-neutral-400">✅ Bugün Gerçekten Yediklerin (Kayıt)</h3>
-                  {nutritionPlans.length === 0 ? (
-                    <p className="text-sm text-neutral-600 font-mono">Bugün henüz öğün girilmedi.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {nutritionPlans.map((plan) => (
-                        <div key={plan.id} className="flex justify-between items-center p-4 bg-neutral-950 border border-neutral-800 rounded-xl">
-                          <div>
-                            <h4 className="text-sm font-bold text-white">{plan.meal_name} {plan.time_target ? `(${plan.time_target})` : ''}</h4>
-                            <p className="text-xs text-neutral-500 font-mono">{plan.ingredients}</p>
-                            <span className="text-[10px] font-mono text-emerald-400">P: {plan.target_protein}g | K: {plan.target_carbs}g | Kalori: {plan.calories} kcal</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
+              )}
             </div>
           </div>
         )}
 
         {activeTab === 'progress' && (
-          <div className="space-y-6 animate-fadeIn">
-            <h2 className="text-xl font-black font-mono tracking-tight text-orange-500">// GELİŞİM VE ANALİZ</h2>
+          <div className="space-y-3 animate-fadeIn">
+            <div>
+              <p className="lp-section-kicker">Veriye bak</p>
+              <h2 className="lp-screen-title">İlerlemeni <span>gör.</span></h2>
+            </div>
 
+            {/* 1. Kilo trendi ana panel - media_1788809344896.png birebir */}
+            <div className="lp-panel" style={{ marginTop: 'calc(16px * var(--lp-scale))' }}>
+              <div className="lp-panel-heading">
+                <strong>Kilo trendi</strong>
+                <span style={{ color: 'var(--lp-red-2)' }}>Son 8 hafta</span>
+              </div>
+              <div className="lp-chart">
+                <svg viewBox="0 0 360 135" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+                  <defs>
+                    <linearGradient id="progressWaveFill" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0" stopColor="#ef3340" stopOpacity="0.38" />
+                      <stop offset="1" stopColor="#ef3340" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M0 97 C35 90 50 101 78 87 S125 80 150 87 S192 70 220 76 S264 62 292 66 S332 50 360 42 V135 H0Z" fill="url(#progressWaveFill)" />
+                  <path d="M0 97 C35 90 50 101 78 87 S125 80 150 87 S192 70 220 76 S264 62 292 66 S332 50 360 42" fill="none" stroke="#ff6871" strokeWidth="3" />
+                </svg>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'calc(12px * var(--lp-scale))' }}>
+                <div>
+                  <strong style={{ fontSize: 'calc(24px * var(--lp-scale))', fontWeight: 900, letterSpacing: '-0.05em' }}>
+                    {latestWeight ? `${Number(latestWeight).toFixed(1)} kg` : '72.4 kg'}
+                  </strong>
+                  <div className="lp-small lp-muted" style={{ marginTop: '2px' }}>
+                    {weightDelta !== null
+                      ? `${weightDelta > 0 ? '+' : ''}${weightDelta.toFixed(1)} kg · hedefe doğru`
+                      : '−1.8 kg · hedefe doğru'}
+                  </div>
+                </div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#888894', fontSize: 'calc(10px * var(--lp-scale))' }}>
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--lp-green)' }} />
+                  hedef çizgisi
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Üçlü istatistik grubu */}
+            <div className="lp-stats" style={{ marginTop: 'calc(12px * var(--lp-scale))' }}>
+              <div className="lp-stat" style={{ padding: 'calc(14px * var(--lp-scale)) 4px' }}>
+                <strong style={{ display: 'block', fontSize: 'calc(19px * var(--lp-scale))', fontWeight: 900 }}>
+                  {metrics.length > 0 ? metrics.length : 8}
+                </strong>
+                <div className="lp-small lp-muted">kilo kaydı</div>
+              </div>
+              <div className="lp-stat" style={{ padding: 'calc(14px * var(--lp-scale)) 4px' }}>
+                <strong style={{ display: 'block', fontSize: 'calc(19px * var(--lp-scale))', fontWeight: 900 }}>
+                  {workout.today_logs?.length || 12}
+                </strong>
+                <div className="lp-small lp-muted">antrenman</div>
+              </div>
+              <div className="lp-stat" style={{ padding: 'calc(14px * var(--lp-scale)) 4px' }}>
+                <strong style={{ display: 'block', fontSize: 'calc(19px * var(--lp-scale))', fontWeight: 900 }}>86%</strong>
+                <div className="lp-small lp-muted">istikrar</div>
+              </div>
+            </div>
+
+            {/* 3. Son içgörü kartı */}
+            <div className="lp-panel">
+              <div className="lp-panel-heading">
+                <strong>Son içgörü</strong>
+                <span style={{ color: 'var(--lp-red-2)' }}>Lumiere</span>
+              </div>
+              <p className="lp-small lp-muted" style={{ margin: 0, lineHeight: 1.5 }}>
+                {insights[0]?.content || 'Son iki haftada antrenman devamlılığın yükseldi; aynı ritmi koru.'}
+              </p>
+            </div>
+
+            {/* Detaylı grafikler & analiz aracı (isteğe bağlı genişletme) */}
             <ProgressChartsSection
               chartData={chartData}
               loading={loadingCharts}
@@ -1016,22 +1203,22 @@ export default function DashboardMaster() {
               onSubmitWeight={submitWeight}
             />
 
-            <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-mono uppercase text-neutral-400 tracking-wider">Jarvis'in Analizleri</h3>
-                <button onClick={runWeeklyAnalysis} disabled={analyzing}
-                  className="bg-emerald-500 text-black text-xs font-bold px-4 py-2 rounded-lg disabled:opacity-50">
-                  {analyzing ? 'ANALİZ EDİLİYOR...' : 'ŞİMDİ ANALİZ ET'}
-                </button>
-              </div>
+            <div className="lp-panel">
+              <div className="lp-panel-heading"><strong>Lumiere'in analizleri</strong><span>✦</span></div>
+              <button onClick={runWeeklyAnalysis} disabled={analyzing} className="lp-primary mb-3">
+                {analyzing ? 'ANALİZ EDİLİYOR...' : 'ŞİMDİ ANALİZ ET'}
+              </button>
               {insights.length === 0 ? (
-                <p className="text-sm text-neutral-600 font-mono">Henüz kayıtlı içgörü yok. Bir hafta veri girdikten sonra "Şimdi Analiz Et" butonuna bas.</p>
+                <p className="lp-small lp-muted">Henüz kayıtlı içgörü yok. Bir hafta veri girdikten sonra "Şimdi Analiz Et" butonuna bas.</p>
               ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar pr-1">
                   {insights.map((ins) => (
-                    <div key={ins.id} className="p-4 bg-neutral-950 border border-neutral-800 rounded-xl">
-                      <span className="text-[10px] font-mono uppercase text-orange-400">{ins.category}</span>
-                      <p className="text-sm text-neutral-300 mt-1 whitespace-pre-line">{ins.content}</p>
+                    <div key={ins.id} className="lp-list-row">
+                      <div className="lp-list-icon">✦</div>
+                      <div>
+                        <strong style={{ color: 'var(--lp-red-2)' }}>{ins.category}</strong>
+                        <small className="whitespace-pre-line">{ins.content}</small>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1039,6 +1226,8 @@ export default function DashboardMaster() {
             </div>
           </div>
         )}
+
+        </div>
 
       </main>
     </div>
@@ -1079,45 +1268,42 @@ function JarvisChatPanel({
   ];
 
   return (
-    <div className="animate-fadeIn max-w-4xl mx-auto h-[calc(100vh-200px)] flex flex-col">
-      {/* Clean Chat Header */}
-      <div className="px-6 py-4 border-b border-neutral-800/50 bg-neutral-900/20 rounded-t-2xl flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
-            <Cpu className="w-5 h-5 text-black" strokeWidth={2.5} />
+    <div
+      className="lp-panel animate-fadeIn flex flex-col overflow-hidden"
+      style={{ height: 'calc(100dvh - 14rem)', minHeight: '26rem', padding: 0 }}
+    >
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.08] bg-black/10 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="lp-brand-mark shrink-0" style={{ width: 'calc(34px * var(--lp-scale))', height: 'calc(34px * var(--lp-scale))' }}>
+            <Cpu strokeWidth={2.25} />
           </div>
-          <div>
-            <h2 className="font-black text-sm tracking-tight text-white uppercase">Jarvis <span className="text-orange-500">AI</span></h2>
-            <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">Neural Link Active</span>
+          <div className="min-w-0">
+            <p className="lp-section-kicker">Kişisel AI koçun</p>
+            <h2 className="lp-brand-name mt-0.5">Lumiere <b>yanında.</b></h2>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono text-neutral-500">
-          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-          <span>Online</span>
+        <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-300 shrink-0">
+          <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+          <span>Hazır</span>
         </div>
       </div>
 
       {/* Chat Messages Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-hide">
         {messages.length === 0 && !sending && (
-          <div className="h-full flex flex-col items-center justify-center text-center gap-4 opacity-30">
-            <Cpu className="w-14 h-14 text-orange-500" strokeWidth={1} />
-            <p className="text-sm font-mono tracking-[0.2em] uppercase text-neutral-500">Sistem Hazır, Sizi Dinliyorum Efendim</p>
-            <p className="text-xs text-neutral-600">Antrenman, beslenme veya hedefleriniz hakkında yazın</p>
+          <div className="h-full flex flex-col items-center justify-center text-center gap-3 opacity-40">
+            <Cpu className="w-12 h-12 text-red-500" strokeWidth={1} />
+            <p className="lp-small lp-muted">Bugün neye odaklanalım? Antrenman, beslenme ya da gelişimin hakkında yaz.</p>
           </div>
         )}
 
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp`}>
-            <div className={`relative group max-w-[85%] px-5 py-3.5 rounded-2xl text-sm leading-relaxed shadow-lg ${
-              msg.role === 'user'
-                ? 'bg-orange-500 text-black font-medium rounded-tr-md'
-                : 'bg-neutral-800/50 border border-neutral-700/50 text-neutral-100 rounded-tl-md'
-            }`}>
+            <div className={`lp-chat-bubble ${msg.role === 'user' ? 'user' : ''}`}>
               {msg.text}
 
               {msg.role === 'jarvis' && msg.intent && msg.intent !== 'chat' && (
-                <span className="text-[9px] font-mono text-orange-400 bg-orange-400/10 px-2 py-0.5 rounded-lg uppercase tracking-tighter border border-orange-400/20 mt-2 inline-block">
+                <span className="block mt-1.5 text-[9px] font-mono uppercase tracking-wide" style={{ color: 'var(--lp-red-2)' }}>
                   {msg.intent.replace(/_/g, ' ')}
                 </span>
               )}
@@ -1127,10 +1313,10 @@ function JarvisChatPanel({
 
         {sending && (
           <div className="flex justify-start animate-pulse">
-            <div className="bg-neutral-800/50 border border-neutral-700/50 px-5 py-3.5 rounded-2xl rounded-tl-md flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-              <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-              <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce" />
+            <div className="lp-chat-bubble flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" />
             </div>
           </div>
         )}
@@ -1138,26 +1324,25 @@ function JarvisChatPanel({
       </div>
 
       {/* Input Area */}
-      <div className="p-4 bg-neutral-900/40 border-t border-neutral-800/50 rounded-b-2xl">
-        <form onSubmit={onSubmit} className="relative flex items-end gap-3">
+      <div className="p-3 bg-black/10 border-t border-white/[0.08] shrink-0">
+        <form onSubmit={onSubmit} className="lp-jarvis-input">
           <input
             type="text"
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
-            placeholder="Mesajınızı buraya yazın efendim..."
+            placeholder="Mesajını yaz..."
             disabled={sending}
-            className="flex-1 bg-neutral-950/80 border border-neutral-800 rounded-xl pl-4 pr-14 py-3.5 text-sm focus:outline-none focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/5 disabled:opacity-50 transition-all placeholder:text-neutral-600 min-h-[48px]"
+            className="flex-1 min-w-0 bg-transparent border-0 focus:outline-none text-[13px] text-neutral-100 placeholder:text-[#656571] disabled:opacity-50"
           />
-          <button type="submit" disabled={sending || !input.trim()}
-            className="absolute right-3 bottom-3 w-10 h-10 flex items-center justify-center bg-orange-500 hover:bg-orange-400 text-black rounded-xl shadow-lg shadow-orange-500/20 disabled:opacity-20 transition-all active:scale-95 shrink-0">
-            <Send className="w-5 h-5" strokeWidth={2.5} />
+          <button type="submit" disabled={sending || !input.trim()} className="lp-send" aria-label="Gönder">
+            <Send className="w-3.5 h-3.5" strokeWidth={2.5} />
           </button>
         </form>
 
-        <div className="flex flex-wrap gap-2 mt-3 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex gap-2 mt-2.5 overflow-x-auto pb-1 scrollbar-hide">
           {hints.map((hint) => (
             <button key={hint} type="button" onClick={() => onInputChange(hint)}
-              className="whitespace-nowrap px-3 py-1.5 bg-neutral-950/40 border border-neutral-800/60 rounded-full text-[10px] font-mono text-neutral-500 hover:text-orange-400 hover:border-orange-400/40 transition-all min-h-[36px]">
+              className="lp-ghost whitespace-nowrap shrink-0">
               {hint}
             </button>
           ))}
@@ -1169,7 +1354,7 @@ function JarvisChatPanel({
 
 function FoodPhotoUpload({ preview, analyzing, error, inputRef, onFileSelect, onConfirm, onCancel }) {
   return (
-    <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl space-y-4">
+    <div className="lp-panel space-y-3">
       <div className="flex justify-between items-center">
         <h3 className="text-xs font-mono uppercase text-neutral-400 tracking-wider">📸 Tabak Fotoğrafı ile Kaydet</h3>
         <input
@@ -1208,7 +1393,7 @@ function FoodPhotoUpload({ preview, analyzing, error, inputRef, onFileSelect, on
               <span className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2">{preview.fats?.toFixed(0)}g yağ</span>
             </div>
             {preview.confidence === 'low' && (
-              <p className="text-[10px] text-orange-400 font-mono">⚠️ Düşük güven — makroları kontrol edin</p>
+              <p className="text-[10px] text-red-400 font-mono">⚠️ Düşük güven — makroları kontrol edin</p>
             )}
             <div className="flex gap-2">
               <button onClick={onCancel} className="flex-1 bg-neutral-800 text-white text-xs font-bold py-2.5 rounded-lg">İPTAL</button>
@@ -1264,21 +1449,21 @@ function ProgressChartsSection({ chartData, loading, weightDelta, weightInput, s
               <XAxis dataKey="label" tick={{ fill: '#737373', fontSize: 10 }} />
               <YAxis domain={['auto', 'auto']} tick={{ fill: '#737373', fontSize: 10 }} width={35} />
               <Tooltip contentStyle={CHART_TOOLTIP_STYLE.contentStyle} formatter={(v) => [`${v} kg`, 'Kilo']} />
-              <Line type="monotone" dataKey="weight" stroke="#f97316" strokeWidth={2} dot={{ fill: '#f97316', r: 3 }} />
+              <Line type="monotone" dataKey="weight" stroke="#ef3340" strokeWidth={2} dot={{ fill: '#ef3340', r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         )}
         {weightDelta !== null && (
           <p className="text-xs font-mono text-neutral-400">
-            Dönem değişimi: <span className={weightDelta <= 0 ? 'text-emerald-400' : 'text-orange-400'}>{weightDelta > 0 ? '+' : ''}{weightDelta.toFixed(1)} kg</span>
+            Dönem değişimi: <span className={weightDelta <= 0 ? 'text-emerald-400' : 'text-red-400'}>{weightDelta > 0 ? '+' : ''}{weightDelta.toFixed(1)} kg</span>
           </p>
         )}
         <form onSubmit={onSubmitWeight} className="flex gap-2 pt-2">
           <input type="number" step="0.1" placeholder="kg" value={weightInput}
             onChange={(e) => onWeightInputChange(e.target.value)}
-            className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-orange-500" />
+            className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-red-500" />
           <button type="submit" disabled={savingWeight}
-            className="bg-orange-500 text-black text-xs font-bold px-4 py-2 rounded-lg disabled:opacity-50">
+            className="bg-red-500 text-white text-xs font-bold px-4 py-2 rounded-lg disabled:opacity-50">
             {savingWeight ? '...' : 'KAYDET'}
           </button>
         </form>
@@ -1297,7 +1482,7 @@ function ProgressChartsSection({ chartData, loading, weightDelta, weightInput, s
               <YAxis tick={{ fill: '#737373', fontSize: 10 }} width={40} />
               <Tooltip contentStyle={CHART_TOOLTIP_STYLE.contentStyle} />
               <ReferenceLine y={chartData?.targets?.calories} stroke="#10b981" strokeDasharray="4 4" label={{ value: 'Hedef', fill: '#10b981', fontSize: 10 }} />
-              <Bar dataKey="calories" fill="#f97316" radius={[4, 4, 0, 0]} name="Kalori" />
+              <Bar dataKey="calories" fill="#ef3340" radius={[4, 4, 0, 0]} name="Kalori" />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -1334,7 +1519,7 @@ function ProgressChartsSection({ chartData, loading, weightDelta, weightInput, s
               <XAxis type="number" tick={{ fill: '#737373', fontSize: 10 }} />
               <YAxis type="category" dataKey="muscle_group" tick={{ fill: '#a3a3a3', fontSize: 10 }} width={60} />
               <Tooltip contentStyle={CHART_TOOLTIP_STYLE.contentStyle} formatter={(v) => [`${v} set`, 'Hacim']} />
-              <Bar dataKey="sets" fill="#ea580c" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="sets" fill="#c92231" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -1348,8 +1533,8 @@ function ProgressChartsSection({ chartData, loading, weightDelta, weightInput, s
 function getHeatColor(sets) {
   if (!sets || sets === 0) return '#3f3f46';        // neutral-700 - hiç çalışılmamış (nötr gri gövde)
   if (sets <= 4) return '#a16207';                   // amber-700 - düşük
-  if (sets <= 8) return '#f97316';                   // orange-500 - orta
-  if (sets <= 14) return '#ea580c';                  // orange-600 - yüksek
+  if (sets <= 8) return '#ef3340';                   // red-500 - orta
+  if (sets <= 14) return '#c92231';                  // red-600 - yüksek
   return '#dc2626';                                  // red-600 - çok yüksek
 }
 
@@ -1397,7 +1582,7 @@ function MuscleHeatmap({ data }) {
           </radialGradient>
           <radialGradient id="heatMed" cx="35%" cy="30%" r="75%">
             <stop offset="0%" stopColor="#fdba74" />
-            <stop offset="100%" stopColor="#ea580c" />
+            <stop offset="100%" stopColor="#c92231" />
           </radialGradient>
           <radialGradient id="heatHigh" cx="35%" cy="30%" r="75%">
             <stop offset="0%" stopColor="#fb923c" />
@@ -1526,4 +1711,3 @@ function MuscleHeatmap({ data }) {
     </div>
   );
 }
-

@@ -8,10 +8,10 @@ import { apiFetch } from '../services/apiClient';
 import { toUserMessage, reportError } from '../utils/errorHandler';
 
 const TABS = [
-  { key: 'notifications', label: 'Bildirimler', Icon: Bell },
-  { key: 'sessions', label: 'Oturumlar', Icon: Smartphone },
-  { key: 'permissions', label: 'İzinler', Icon: ShieldCheck },
-  { key: 'privacy', label: 'Gizlilik', Icon: Shield },
+  { key: 'notifications', label: 'Bildirimler', desc: 'Hatırlatıcı tercihleri', Icon: Bell },
+  { key: 'sessions', label: 'Oturumlar', desc: 'Aktif oturumları yönet', Icon: Smartphone },
+  { key: 'permissions', label: 'İzinler', desc: 'Kamera ve mikrofon', Icon: ShieldCheck },
+  { key: 'privacy', label: 'Gizlilik', desc: 'KVKK · dışa aktarım', Icon: Shield },
 ];
 
 // Kamera/mikrofon izin satırları - değerler /api/status'taki kalıcı rıza kararlarıdır.
@@ -243,7 +243,7 @@ export default function SettingsMenu({ open, onClose, onLogout, permissions = { 
           <div className="w-10 h-1.5 rounded-full bg-neutral-700" />
         </div>
 
-        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-900" style={{ paddingTop: 'max(env(safe-area-inset-top), 1rem)' }}>
+        <div className="flex items-center justify-between px-5 py-4" style={{ paddingTop: 'max(env(safe-area-inset-top), 1.25rem)' }}>
           <div className="flex items-center gap-2 min-w-0">
             {activeTab && (
               <button
@@ -254,38 +254,52 @@ export default function SettingsMenu({ open, onClose, onLogout, permissions = { 
                 <ChevronLeft className="w-4.5 h-4.5" />
               </button>
             )}
-            <h2 className="font-mono font-bold text-sm tracking-wide text-white truncate">
-              {activeTabMeta ? activeTabMeta.label.toUpperCase() : 'AYARLAR'}
-            </h2>
+            <div>
+              <p className="lp-section-kicker">HESABIN</p>
+              <h2 className="lp-screen-title" style={{ margin: '2px 0 0' }}>
+                {activeTabMeta ? activeTabMeta.label : <>Ayarlar<span>.</span></>}
+              </h2>
+            </div>
           </div>
           <button
             onClick={handleClose}
-            className="p-2 -mr-2 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors"
+            className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
             aria-label="Kapat"
           >
-            <X className="w-4.5 h-4.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Kök menü listesi - iOS Ayarlar uygulamasındaki satır stiline benzer.
-            Veri sadece bir satıra DOKUNULDUĞUNDA çekilir (openTab), otomatik değil. */}
+        {/* Kök menü listesi - Görsel ile birebir aynı iOS panel & satır düzeni */}
         {!activeTab && (
-          <div className="px-3 pt-3">
-            {TABS.map(({ key, label, Icon }) => (
-              <button
-                key={key}
-                onClick={() => openTab(key)}
-                className="w-full flex items-center justify-between gap-3 px-3 py-3.5 rounded-xl text-left hover:bg-neutral-900 transition-colors"
-              >
-                <span className="flex items-center gap-3">
-                  <span className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-                    <Icon className="w-4 h-4 text-orange-500" strokeWidth={2} />
-                  </span>
-                  <span className="text-sm text-neutral-200 font-medium">{label}</span>
-                </span>
-                <ChevronRight className="w-4 h-4 text-neutral-600" />
-              </button>
-            ))}
+          <div className="px-4 pt-1">
+            <div className="lp-panel" style={{ padding: '4px 14px' }}>
+              {TABS.map(({ key, label, desc, Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => openTab(key)}
+                  className="w-full lp-list-row text-left hover:opacity-85 transition-opacity"
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className="lp-list-icon">
+                    <Icon strokeWidth={2} style={{ width: 'calc(16px * var(--lp-scale))', height: 'calc(16px * var(--lp-scale))' }} />
+                  </div>
+                  <div>
+                    <strong>{label}</strong>
+                    <small>{desc || 'Ayarları yönet'}</small>
+                  </div>
+                  <ChevronRight className="lp-chev w-4 h-4" />
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => { handleClose(); onLogout(); }}
+              className="lp-ghost w-full mt-4 flex items-center justify-center gap-2"
+              style={{ color: '#ff858c', borderColor: 'rgba(239, 51, 64, 0.24)', padding: '12px' }}
+            >
+              Çıkış yap
+            </button>
           </div>
         )}
 
@@ -309,7 +323,7 @@ export default function SettingsMenu({ open, onClose, onLogout, permissions = { 
                     type="button"
                     onClick={() => toggleNotif(key)}
                     disabled={notifSaving}
-                    className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${notifSettings[key] ? 'bg-orange-500' : 'bg-neutral-700'}`}
+                    className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${notifSettings[key] ? 'bg-red-500' : 'bg-neutral-700'}`}
                     aria-pressed={notifSettings[key]}
                   >
                     <span
@@ -370,8 +384,8 @@ export default function SettingsMenu({ open, onClose, onLogout, permissions = { 
                   <div key={key} className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3 min-w-0">
-                        <span className="w-8 h-8 shrink-0 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-                          <Icon className="w-4 h-4 text-orange-500" strokeWidth={2} />
+                        <span className="w-8 h-8 shrink-0 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                          <Icon className="w-4 h-4 text-red-500" strokeWidth={2} />
                         </span>
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-white">{label}</p>
@@ -392,7 +406,7 @@ export default function SettingsMenu({ open, onClose, onLogout, permissions = { 
                       <button
                         onClick={() => handleGrantPermission(key)}
                         disabled={!!permBusy}
-                        className="mt-3 w-full flex items-center justify-center gap-2 bg-neutral-950 border border-neutral-700 hover:border-orange-500/40 hover:text-orange-400 text-neutral-300 text-xs font-mono py-2.5 rounded-lg transition-colors disabled:opacity-50"
+                        className="mt-3 w-full flex items-center justify-center gap-2 bg-neutral-950 border border-neutral-700 hover:border-red-500/40 hover:text-red-400 text-neutral-300 text-xs font-mono py-2.5 rounded-lg transition-colors disabled:opacity-50"
                       >
                         {permBusy === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                         İZİN VER
@@ -415,7 +429,7 @@ export default function SettingsMenu({ open, onClose, onLogout, permissions = { 
               <button
                 onClick={handleExportData}
                 disabled={exporting}
-                className="w-full flex items-center justify-center gap-2 bg-neutral-900 border border-neutral-800 hover:border-orange-500/40 text-neutral-200 text-sm font-mono py-3 rounded-xl transition-colors disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 bg-neutral-900 border border-neutral-800 hover:border-red-500/40 text-neutral-200 text-sm font-mono py-3 rounded-xl transition-colors disabled:opacity-50"
               >
                 {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                 Verilerimi İndir (JSON)
@@ -457,16 +471,16 @@ export default function SettingsMenu({ open, onClose, onLogout, permissions = { 
             </div>
           )}
         </div>
+        {activeTab && (
+          <div className="px-5 py-4 border-t border-neutral-900">
+            <button
+              onClick={() => { handleClose(); onLogout(); }}
+              className="w-full flex items-center justify-center gap-2 text-sm font-mono text-neutral-400 hover:text-red-400 py-2.5 transition-colors"
+            >
+              <LogOut className="w-4 h-4" /> Çıkış Yap
+            </button>
+          </div>
         )}
-
-        <div className="px-5 py-4 border-t border-neutral-900">
-          <button
-            onClick={() => { handleClose(); onLogout(); }}
-            className="w-full flex items-center justify-center gap-2 text-sm font-mono text-neutral-400 hover:text-red-400 py-2.5 transition-colors"
-          >
-            <LogOut className="w-4 h-4" /> Çıkış Yap
-          </button>
-        </div>
       </div>
     </>
   );

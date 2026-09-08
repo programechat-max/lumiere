@@ -15,6 +15,7 @@ htmlcov/
 *.sqlite3
 .env
 backend/.env
+.env.local
 
 # Editör / işletim sistemi
 .DS_Store
@@ -27,3 +28,7 @@ ios/App/Pods/
 
 # Loglar
 *.log
+
+# Zip arşivleri / çalışma zamanı dosyaları
+*.zip
+backend/celerybeat-schedule

@@ -4,6 +4,8 @@
 import { API_BASE } from '../config';
 import { getAccessToken, refreshAccessToken, clearLocalSession } from './authService';
 
+const isCapacitor = () => typeof window !== 'undefined' && !!window.Capacitor;
+
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 function buildRequestId() {
@@ -41,7 +43,7 @@ export async function apiFetch(path, options = {}) {
     try {
       return await fetch(url, {
         ...fetchOptions,
-        credentials: fetchOptions.credentials ?? 'include',
+        credentials: fetchOptions.credentials ?? (isCapacitor() ? 'omit' : 'include'),
         signal: controller.signal,
         headers: {
           ...(fetchOptions.body && !(fetchOptions.body instanceof FormData)

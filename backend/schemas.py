@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import date, datetime
 # --- HESAP / AUTH ŞEMALARI ---
 class UserRegister(BaseModel):
@@ -61,6 +61,12 @@ class UserProfileResponse(UserProfileBase):
     id: int
     class Config:
         from_attributes = True
+
+
+class OnboardingCompleteRequest(UserProfileBase):
+    """Temel profil ile birlikte onboarding medya analizlerinin kalıcı aktarımı."""
+    video_analysis: Optional[Dict[str, Any]] = None
+    voice_analysis: Optional[Dict[str, Any]] = None
 
 # --- HAREKET VE PROGRAM ŞEMALARI ---
 class ExerciseBase(BaseModel):
@@ -256,4 +262,3 @@ class NutritionQuestionnaire(BaseModel):
     pace: Optional[str] = None                 # aggressive | balanced | slow
     cheat_meal: Optional[str] = None           # none | weekly | biweekly | flexible
     notes: Optional[str] = None
-

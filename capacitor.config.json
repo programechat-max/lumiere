@@ -2,5 +2,14 @@
   "appId": "com.lumiere.coaching",
   "appName": "Lumiere Coaching",
   "webDir": "dist",
-  "bundledWebRuntime": false
+  "bundledWebRuntime": false,
+  "server": {
+    "allowNavigation": [
+      "lumiere-api-ea82.onrender.com",
+      "192.168.0.5",
+      "192.168.0.7",
+      "localhost"
+    ],
+    "iosScheme": "capacitor"
+  }
 }

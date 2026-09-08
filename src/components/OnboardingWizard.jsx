@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { API_BASE } from '../config';
 import * as authService from '../services/authService';
+import { apiFetch } from '../services/apiClient';
 
 /**
  * ÇOK SAYFALI ONBOARDING WIZARD (izin akışlı).
@@ -73,6 +74,8 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
   const [videoBlob, setVideoBlob] = useState(null);
   const [videoReport, setVideoReport] = useState(null);
   const [analyzingVideo, setAnalyzingVideo] = useState(false);
+  const [videoTaskId, setVideoTaskId] = useState('');
+  const [videoProgress, setVideoProgress] = useState(0);
 
   const [audioBlob, setAudioBlob] = useState(null);
   const [voiceResult, setVoiceResult] = useState(null);
@@ -90,6 +93,24 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
   const tickTimerRef = useRef(null);
 
   const updateForm = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+
+  const extractErrorMessage = async (res, fallback) => {
+    try {
+      const body = await res.json();
+      return body.detail || body?.error?.message || fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const handleIfSessionExpired = (res) => {
+    if (res.status === 401) {
+      authService.clearLocalSession();
+      setCurrentPage?.('login');
+      return true;
+    }
+    return false;
+  };
 
   // Sekme kapanınca/tekrar render'da açık kalan stream'i mutlaka bırak.
   const stopLiveStreams = () => {
@@ -143,11 +164,18 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
         videoPreviewRef.current.play().catch(() => {});
       }
       chunksRef.current = [];
+      const preferredMimeTypes = kind === 'video'
+        ? ['video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm']
+        : ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
+      const mimeType = preferredMimeTypes.find((type) => MediaRecorder.isTypeSupported?.(type)) || '';
       const recorderOptions = kind === 'video' ? { videoBitsPerSecond: VIDEO_BITRATE } : {};
+      if (mimeType) recorderOptions.mimeType = mimeType;
       const recorder = new MediaRecorder(stream, recorderOptions);
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: kind === 'video' ? 'video/webm' : 'audio/webm' });
+        // iOS Safari MP4/M4A, bazı tarayıcılar WebM üretir; gerçek MIME türünü koru.
+        const actualMimeType = recorder.mimeType || mimeType || (kind === 'video' ? 'video/webm' : 'audio/webm');
+        const blob = new Blob(chunksRef.current, { type: actualMimeType });
         if (kind === 'video') setVideoBlob(blob); else setAudioBlob(blob);
         stream.getTracks().forEach((t) => t.stop());
         setIsRecording(false);
@@ -176,28 +204,14 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
   };
 
   const resetRecording = (kind) => {
-    if (kind === 'video') { setVideoBlob(null); setVideoReport(null); }
+    if (kind === 'video') {
+      setVideoBlob(null);
+      setVideoReport(null);
+      setVideoTaskId('');
+      setVideoProgress(0);
+    }
     else { setAudioBlob(null); setVoiceResult(null); }
     setMediaError('');
-  };
-
-  // Backend hata detayını (413/503/500 vb.) göster; 401'de oturumu temizleyip login'e dön.
-  const extractErrorMessage = async (res, fallback) => {
-    try {
-      const data = await res.json();
-      return data.detail || fallback;
-    } catch {
-      return fallback;
-    }
-  };
-
-  const handleIfSessionExpired = (res) => {
-    if (res.status === 401) {
-      authService.clearLocalSession();
-      setCurrentPage('login');
-      return true;
-    }
-    return false;
   };
 
   const analyzeVideo = async () => {
@@ -206,21 +220,31 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
     setMediaError('');
     try {
       const fd = new FormData();
-      fd.append('file', videoBlob, 'body-scan.webm');
-      const res = await fetch(`${API_BASE}/api/onboarding/video`, {
+      const videoExtension = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
+      fd.append('file', videoBlob, `body-scan.${videoExtension}`);
+      const queued = await apiFetch('/api/v1/jobs/onboarding/video', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${authService.getAccessToken()}` },
         body: fd,
+        timeoutMs: 60_000,
+        retries: 1,
       });
-      if (handleIfSessionExpired(res)) return;
-      if (!res.ok) {
-        setMediaError(await extractErrorMessage(res, 'Video analiz edilemedi, tekrar dener misin?'));
-        return;
+      if (!queued?.task_id) throw new Error('Video görevi kuyruğa alınamadı. Lütfen tekrar deneyin.');
+      setVideoTaskId(queued.task_id);
+      setVideoProgress(0);
+      let result = null;
+      const deadline = Date.now() + 5 * 60_000;
+      while (Date.now() < deadline) {
+        const job = await apiFetch(`/api/v1/jobs/${queued.task_id}`, { timeoutMs: 20_000, retries: 1 });
+        setVideoProgress(Math.max(0, Math.min(100, Number(job.progress_percent || 0))));
+        if (job.status === 'success') { result = job.result; break; }
+        if (job.status === 'failure') throw new Error(job.error_message || 'Video analiz işi başarısız oldu.');
+        await new Promise((resolve) => setTimeout(resolve, 3000));
       }
-      setVideoReport(await res.json());
+      if (!result?.report) throw new Error('Video analizi tamamlanamadı. Lütfen videoyu tekrar gönderin.');
+      setVideoReport(result);
     } catch (e) {
       console.error(e);
-      setMediaError('Sunucuya bağlanılamadı. Backend çalışıyor mu ve video çok uzun değil mi kontrol eder misin?');
+      setMediaError(e?.message || 'Video analiz edilemedi. Lütfen tekrar dener misin?');
     } finally {
       setAnalyzingVideo(false);
     }
@@ -232,21 +256,21 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
     setMediaError('');
     try {
       const fd = new FormData();
-      fd.append('file', audioBlob, 'voice-note.webm');
-      const res = await fetch(`${API_BASE}/api/onboarding/voice`, {
+      const audioExtension = audioBlob.type.includes('mp4') ? 'm4a' : 'webm';
+      fd.append('file', audioBlob, `voice-note.${audioExtension}`);
+      const result = await apiFetch('/api/onboarding/voice', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${authService.getAccessToken()}` },
         body: fd,
+        timeoutMs: 120_000,
+        retries: 1,
       });
-      if (handleIfSessionExpired(res)) return;
-      if (!res.ok) {
-        setMediaError(await extractErrorMessage(res, 'Ses kaydı analiz edilemedi, tekrar dener misin?'));
-        return;
+      if (!result?.transcript || result.transcript === '[ANLAŞILAMADI]') {
+        throw new Error('Ses net anlaşılmadı. Sessiz bir ortamda, mikrofona yakın ve en az 10 saniye konuşarak tekrar dener misin?');
       }
-      setVoiceResult(await res.json());
+      setVoiceResult(result);
     } catch (e) {
       console.error(e);
-      setMediaError('Sunucuya bağlanılamadı. Backend çalışıyor mu kontrol eder misin?');
+      setMediaError(e?.message || 'Ses kaydı işlenemedi. Lütfen tekrar dener misin?');
     } finally {
       setAnalyzingVoice(false);
     }
@@ -269,6 +293,10 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
         // İzin kararlarını kalıcı olarak profil sütunlarına yaz.
         camera_permission_granted: camPerm === 'granted',
         microphone_permission_granted: micPerm === 'granted',
+        // Medya analizlerini profil tamamlanırken backend'e aktar; program
+        // oluşturucu ve sonraki oturumlar aynı bağlamı kullanabilsin.
+        video_analysis: videoReport || null,
+        voice_analysis: voiceResult || null,
       };
       const res = await fetch(`${API_BASE}/api/onboarding/complete`, {
         method: 'POST',
@@ -295,7 +323,7 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
   };
 
   const goToDashboard = async () => {
-    await onComplete();
+      await onComplete({ videoReport, voiceResult });
   };
 
   // ----------------------------------------
@@ -330,23 +358,24 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
 
   if (step === 6) {
     return (
-      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
+      <div className="lumiere-app-shell safe-page text-white flex items-center justify-center p-4">
         <div className="w-full max-w-md text-center space-y-5 animate-fadeIn">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+          <div className="w-16 h-16 mx-auto rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shadow-xl shadow-emerald-950/20">
             <Check className="w-8 h-8 text-emerald-400" strokeWidth={2.5} />
           </div>
-          <h1 className="text-2xl font-black font-mono tracking-wide">PROFİLİN HAZIR</h1>
+          <p className="lp-section-kicker">Temel profil tamamlandı</p>
+          <h1 className="text-3xl font-black tracking-[-0.06em]">Profilin <span className="text-red-400">hazır.</span></h1>
           <p className="text-sm text-neutral-400 leading-relaxed">
             Temel bilgilerin kaydedildi. Şimdi iki ayrı detaylı anketle antrenman ve
-            beslenme programlarını <span className="text-orange-400 font-bold">tamamen sana özel</span> oluşturacağız.
+            beslenme programlarını <span className="text-red-400 font-bold">tamamen sana özel</span> oluşturacağız.
           </p>
-          <div className="text-left bg-neutral-900 border border-neutral-800 rounded-2xl p-4 space-y-2.5">
+          <div className="lp-panel text-left rounded-3xl p-4 space-y-2.5">
             {[
               { Icon: Dumbbell, label: 'Antrenman', desc: 'Ekipman, program, sakatlık ve hedef soruları' },
               { Icon: Salad, label: 'Beslenme', desc: 'Alerji, bütçe, mutfak ve damak tadı soruları' },
             ].map(({ Icon, label, desc }) => (
               <div key={label} className="flex items-start gap-2.5">
-                <Icon className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                <Icon className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-bold">{label} Oluşturucu</p>
                   <p className="text-[10px] text-neutral-500 leading-snug">{desc}</p>
@@ -356,7 +385,7 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
           </div>
           <button
             onClick={goToDashboard}
-            className="w-full bg-orange-500 hover:bg-orange-400 text-black font-bold font-mono text-sm tracking-wide py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="lp-primary w-full font-bold text-sm tracking-wide py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             PROGRAM OLUŞTURUCUYA GEÇ <ArrowRight className="w-4 h-4" />
           </button>
@@ -366,11 +395,11 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-4 sm:p-6">
+    <div className="lumiere-app-shell safe-page text-white flex flex-col items-center justify-center p-4 sm:p-6">
       {/* Donmayan arkaplan: blur filtresi yerine radial gradient */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(249,115,22,0.07), transparent 70%)' }}
+        style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(239,51,64,0.07), transparent 70%)' }}
       />
       <div className="relative w-full max-w-xl">
         {/* İlerleme göstergesi */}
@@ -382,24 +411,21 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
                 onClick={() => { if (i < step) goToStep(i); }}
                 disabled={i > step}
                 className={`text-[10px] font-mono uppercase tracking-widest transition-colors ${
-                  i === step ? 'text-orange-400 font-bold' : i < step ? 'text-neutral-400 hover:text-white' : 'text-neutral-700'
+                  i === step ? 'text-red-400 font-bold' : i < step ? 'text-neutral-400 hover:text-white' : 'text-neutral-700'
                 }`}
               >
                 {label}
               </button>
             ))}
           </div>
-          <div className="h-1 bg-neutral-800 rounded-full overflow-hidden flex gap-1">
+          <div className="lp-stepper">
             {STEP_LABELS.map((_, i) => (
-              <div
-                key={i}
-                className={`h-full flex-1 rounded-full transition-all duration-300 ${i <= step ? 'bg-orange-500' : 'bg-neutral-800'}`}
-              />
+              <b key={i} className={i <= step ? 'on' : ''} />
             ))}
           </div>
         </div>
 
-        <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/60 animate-fadeIn">
+        <div className="lp-panel rounded-[28px] p-6 sm:p-8 shadow-2xl shadow-black/60 animate-fadeIn">
           {stepError && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs px-4 py-3 rounded-xl mb-5 font-mono">
               ⚠ {stepError}
@@ -409,11 +435,12 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
           {/* ADIM 0: HOŞ GELDİN */}
           {step === 0 && (
             <div className="space-y-5 text-center">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
-                <Sparkles className="w-7 h-7 text-orange-400" />
+              <div className="w-14 h-14 mx-auto rounded-3xl bg-gradient-to-br from-red-400/20 to-red-900/30 border border-red-400/30 flex items-center justify-center shadow-xl shadow-red-950/20">
+                <Sparkles className="w-7 h-7 text-red-300" />
               </div>
-              <h1 className="text-2xl font-black font-mono tracking-wide">
-                HOŞ GELDİN <span className="text-orange-500">SPORÇU</span>
+              <p className="lp-section-kicker">Lumiere'a hoş geldin</p>
+              <h1 className="text-3xl font-black tracking-[-0.06em]">
+                Hedefine <span className="text-red-400">yaklaş.</span>
               </h1>
               <p className="text-sm text-neutral-400 leading-relaxed">
                 5 kısa adımda seni tanıyıp tamamen sana özel bir antrenman ve beslenme programı kuracağım.
@@ -426,7 +453,7 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
                   { Icon: Mic, title: 'Mikrofon', desc: 'İstersen sesli anlatım ile yaşam rutini' },
                 ].map(({ Icon, title, desc }) => (
                   <div key={title} className="bg-neutral-950 border border-neutral-800 rounded-xl p-3.5">
-                    <Icon className="w-4 h-4 text-orange-400 mb-2" />
+                    <Icon className="w-4 h-4 text-red-400 mb-2" />
                     <p className="text-xs font-bold">{title}</p>
                     <p className="text-[11px] text-neutral-500 leading-snug mt-0.5">{desc}</p>
                   </div>
@@ -441,7 +468,7 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
               </div>
               <button
                 onClick={() => goToStep(1)}
-                className="w-full bg-orange-500 hover:bg-orange-400 text-black font-bold font-mono text-sm tracking-wide py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full bg-red-500 hover:bg-red-400 text-white font-bold font-mono text-sm tracking-wide py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 BAŞLAYALIM <ArrowRight className="w-4 h-4" />
               </button>
@@ -473,13 +500,13 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
                     onClick={() => updateForm('goal', g.id)}
                     className={`w-full text-left px-4 py-3 rounded-xl border transition-all cursor-pointer ${
                       form.goal === g.id
-                        ? 'border-orange-500 bg-orange-500/10'
+                        ? 'border-red-500 bg-red-500/10'
                         : 'border-neutral-800 bg-neutral-950 hover:border-neutral-700'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <p className={`text-sm font-bold ${form.goal === g.id ? 'text-orange-400' : 'text-white'}`}>{g.label}</p>
-                      {form.goal === g.id && <Check className="w-4 h-4 text-orange-400" />}
+                      <p className={`text-sm font-bold ${form.goal === g.id ? 'text-red-400' : 'text-white'}`}>{g.label}</p>
+                      {form.goal === g.id && <Check className="w-4 h-4 text-red-400" />}
                     </div>
                     <p className="text-[11px] text-neutral-500 mt-0.5">{g.desc}</p>
                   </button>
@@ -495,7 +522,7 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
                       title={e.desc}
                       className={`py-2.5 rounded-xl border text-[11px] font-mono transition-all cursor-pointer ${
                         String(form.experience_months) === e.id
-                          ? 'border-orange-500 bg-orange-500/10 text-orange-400'
+                          ? 'border-red-500 bg-red-500/10 text-red-400'
                           : 'border-neutral-800 bg-neutral-950 text-neutral-400 hover:border-neutral-700'
                       }`}
                     >
@@ -513,11 +540,11 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
                       onClick={() => updateForm('activity_level', a.id)}
                       className={`text-left px-3.5 py-2.5 rounded-xl border transition-all cursor-pointer ${
                         form.activity_level === a.id
-                          ? 'border-orange-500 bg-orange-500/10'
+                          ? 'border-red-500 bg-red-500/10'
                           : 'border-neutral-800 bg-neutral-950 hover:border-neutral-700'
                       }`}
                     >
-                      <p className={`text-xs font-bold ${form.activity_level === a.id ? 'text-orange-400' : 'text-white'}`}>{a.label}</p>
+                      <p className={`text-xs font-bold ${form.activity_level === a.id ? 'text-red-400' : 'text-white'}`}>{a.label}</p>
                       <p className="text-[10px] text-neutral-500">{a.desc}</p>
                     </button>
                   ))}
@@ -551,7 +578,7 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
                 <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 flex flex-col items-center gap-3">
                   {!videoBlob && !isRecording && (
                     <>
-                      <VideoIcon className="w-8 h-8 text-orange-400" />
+                      <VideoIcon className="w-8 h-8 text-red-400" />
                       <p className="text-xs text-neutral-400 text-center">Kamera hazır. Kayda basıp yavaşça önden ve yandan dön.</p>
                       <button onClick={() => startRecording('video')} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer transition-colors">
                         ● KAYDI BAŞLAT <span className="opacity-70">(max {MAX_VIDEO_SECONDS} sn)</span>
@@ -574,13 +601,26 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
                     <>
                       <video src={URL.createObjectURL(videoBlob)} controls className="w-full rounded-xl border border-neutral-800" />
                       {!videoReport ? (
-                        <div className="flex gap-2 w-full">
+                        <div className="flex flex-col gap-2 w-full">
+                          {analyzingVideo && (
+                            <div className="w-full bg-neutral-900 border border-red-500/30 rounded-lg px-3 py-2 text-[11px] text-red-300">
+                              <div className="flex items-center justify-between gap-2">
+                                <span>Video görevi kuyruğa alındı · {videoProgress}%</span>
+                                <span className="font-mono text-neutral-500">{videoTaskId ? `${videoTaskId.slice(0, 8)}…` : 'kuyruğa alınıyor'}</span>
+                              </div>
+                              <div className="mt-1.5 h-1 rounded-full bg-neutral-800 overflow-hidden">
+                                <div className="h-full bg-red-400 transition-all duration-500" style={{ width: `${Math.max(videoProgress, 5)}%` }} />
+                              </div>
+                            </div>
+                          )}
+                          <div className="flex gap-2 w-full">
                           <button onClick={() => resetRecording('video')} className="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer transition-colors flex items-center justify-center gap-1.5">
                             <RefreshCw className="w-3.5 h-3.5" /> TEKRAR
                           </button>
-                          <button onClick={analyzeVideo} disabled={analyzingVideo} className="flex-1 bg-orange-500 hover:bg-orange-400 text-black font-bold py-2.5 rounded-xl text-xs disabled:opacity-50 cursor-pointer transition-colors">
+                          <button onClick={analyzeVideo} disabled={analyzingVideo} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-bold py-2.5 rounded-xl text-xs disabled:opacity-50 cursor-pointer transition-colors">
                             {analyzingVideo ? 'ANALİZ EDİLİYOR...' : 'GÖNDER & ANALİZ ET'}
                           </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="w-full bg-emerald-500/5 border border-emerald-500/30 rounded-xl p-3.5 text-xs text-neutral-300 leading-relaxed max-h-44 overflow-y-auto custom-scrollbar">
@@ -628,7 +668,7 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
                 <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-4 flex flex-col items-center gap-3">
                   {!audioBlob && !isRecording && (
                     <>
-                      <Mic className="w-8 h-8 text-orange-400" />
+                      <Mic className="w-8 h-8 text-red-400" />
                       <p className="text-xs text-neutral-400 text-center">Mikrofon hazır. Kayda basıp kendini rahatça anlat.</p>
                       <button onClick={() => startRecording('audio')} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer transition-colors">
                         ● KAYDI BAŞLAT
@@ -653,7 +693,7 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
                         <button onClick={() => resetRecording('audio')} className="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer transition-colors flex items-center justify-center gap-1.5">
                           <RefreshCw className="w-3.5 h-3.5" /> TEKRAR
                         </button>
-                        <button onClick={analyzeVoice} disabled={analyzingVoice} className="flex-1 bg-orange-500 hover:bg-orange-400 text-black font-bold py-2.5 rounded-xl text-xs disabled:opacity-50 cursor-pointer transition-colors">
+                        <button onClick={analyzeVoice} disabled={analyzingVoice} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-bold py-2.5 rounded-xl text-xs disabled:opacity-50 cursor-pointer transition-colors">
                           {analyzingVoice ? 'İŞLENİYOR...' : 'GÖNDER'}
                         </button>
                       </div>
@@ -704,7 +744,7 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
               <button
                 onClick={finishOnboarding}
                 disabled={finishing}
-                className="w-full bg-orange-500 hover:bg-orange-400 text-black font-bold font-mono text-sm tracking-wide py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                className="w-full bg-red-500 hover:bg-red-400 text-white font-bold font-mono text-sm tracking-wide py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {finishing ? (
                   <><RefreshCw className="w-4 h-4 animate-spin" /> KAYDEDİLİYOR...</>
@@ -728,8 +768,8 @@ export default function OnboardingWizard({ onComplete, setCurrentPage }) {
 function StepHeader({ Icon, title, desc }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="w-10 h-10 shrink-0 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-        <Icon className="w-5 h-5 text-orange-400" />
+      <div className="w-10 h-10 shrink-0 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+        <Icon className="w-5 h-5 text-red-400" />
       </div>
       <div>
         <h2 className="text-base font-black font-mono tracking-wide">{title}</h2>
@@ -748,7 +788,7 @@ function StepNav({ onBack, onNext, nextLabel, skipHint }) {
       <div className="text-right">
         <button
           onClick={onNext}
-          className="bg-orange-500 hover:bg-orange-400 text-black font-bold font-mono text-xs tracking-wide px-5 py-2.5 rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer"
+          className="bg-red-500 hover:bg-red-400 text-white font-bold font-mono text-xs tracking-wide px-5 py-2.5 rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer"
         >
           {nextLabel} <ArrowRight className="w-3.5 h-3.5" />
         </button>
@@ -771,7 +811,7 @@ function PermissionPrompt({ kind, status, onRequest, points }) {
     <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          {kind === 'camera' ? <Camera className="w-5 h-5 text-orange-400" /> : <Mic className="w-5 h-5 text-orange-400" />}
+          {kind === 'camera' ? <Camera className="w-5 h-5 text-red-400" /> : <Mic className="w-5 h-5 text-red-400" />}
           <span className="text-sm font-bold">{kind === 'camera' ? 'Kamera erişimi' : 'Mikrofon erişimi'} istiyorum</span>
         </div>
         <span className={`flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest ${meta.tone}`}>
@@ -794,7 +834,7 @@ function PermissionPrompt({ kind, status, onRequest, points }) {
       {status !== 'unavailable' && (
         <button
           onClick={onRequest}
-          className="w-full bg-orange-500 hover:bg-orange-400 text-black font-bold font-mono text-xs tracking-wide py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full bg-red-500 hover:bg-red-400 text-white font-bold font-mono text-xs tracking-wide py-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
         >
           <ShieldCheck className="w-4 h-4" />
           {status === 'denied' ? 'TEKRAR DENE' : 'İZİN VER'}
@@ -823,7 +863,7 @@ function NumberField({ label, value, onChange, placeholder, suffix }) {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
         />
         {suffix && <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-neutral-600 uppercase">{suffix}</span>}
       </div>
@@ -839,7 +879,7 @@ function TextField({ label, value, onChange, placeholder }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors"
       />
     </FieldShell>
   );

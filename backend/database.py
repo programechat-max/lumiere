@@ -70,12 +70,15 @@ def migrate_schema():
     SQLite tabanlı yerel geliştirme + geriye dönük uyumluluk için korunmuştur."""
     import models  # noqa: F401 — tabloları register et
 
-    Base.metadata.create_all(bind=engine)
-
     if not IS_SQLITE:
         # PostgreSQL/diğer sunucularda şema yönetimi Alembic'e devredilir.
         logger.info("PostgreSQL/harici veritabanı algılandı - kolon bazlı otomatik migrasyon atlanıyor (Alembic kullanın).")
         return
+
+    # SQLite fallback'te geriye dönük uyumluluk için tabloları otomatik oluştur.
+    # PostgreSQL şeması yalnızca Alembic tarafından yönetilir; aksi hâlde ilk
+    # migration create_all ile çakışır.
+    Base.metadata.create_all(bind=engine)
 
     inspector = inspect(engine)
 
