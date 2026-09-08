@@ -1,16 +1,21 @@
-import React from 'react';
-import { Cpu } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
+import Logo from './components/lumiere/Logo';
 import * as authService from './services/authService';
 import { validateEmailField, validatePasswordForSignup, isNetworkError } from './utils/validators';
 import { toUserMessage, reportError } from './utils/errorHandler';
 
+/**
+ * Giriş ekranı — love repo `src/routes/index.tsx` tasarımı + mevcut authService.
+ * Backend: /api/v1/auth/login (HttpOnly refresh-token cookie akışı).
+ */
 export default function Login({ setCurrentPage }) {
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [error, setError] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
-  const [emailError, setEmailError] = React.useState('');
-  const [passwordError, setPasswordError] = React.useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   const handleEmailChange = (e) => {
     const value = e.target.value;
@@ -21,7 +26,7 @@ export default function Login({ setCurrentPage }) {
   const handlePasswordChange = (e) => {
     const value = e.target.value;
     setPassword(value);
-    setPasswordError(value ? (validatePasswordForSignup(value) || '') : '');
+    setPasswordError(value ? '' : '');
   };
 
   const handleLogin = async (e) => {
@@ -36,9 +41,6 @@ export default function Login({ setCurrentPage }) {
 
     setLoading(true);
     try {
-      // authService.login PROMPT 2/8 kapsamında eklenen /api/v1/auth/login akışını
-      // kullanır: HttpOnly refresh-token cookie'si alır, access token'ı bellekte
-      // (+ geriye dönük uyumluluk için localStorage aynası) tutar.
       await authService.login(email.trim(), password);
       setCurrentPage('dashboard');
     } catch (err) {
@@ -54,74 +56,86 @@ export default function Login({ setCurrentPage }) {
   };
 
   return (
-    <div className="lp-auth-screen lp-column text-white min-h-screen relative">
-      <div style={{ textAlign: 'center' }}>
-        <div className="lp-brand-mark lp-auth-brand flex items-center justify-center">
-          <Cpu strokeWidth={2} />
+    <main className="hero-bg flex min-h-dvh flex-col justify-center px-5 py-10">
+      <div className="mx-auto w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <Logo size="lg" showText={false} />
+          <p className="eyebrow mt-5 text-primary-glow">Kişisel performans alanın</p>
+          <h1 className="mt-2 text-3xl font-extrabold leading-tight">
+            LUMIERE <span className="text-primary-glow">COACHING</span>
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">Koçun, planların ve ilerlemen tek yerde.</p>
         </div>
-        <p className="lp-section-kicker">Kişisel performans alanın</p>
-        <h1 className="lp-screen-title lp-auth-title">
-          LUMIERE <span>COACHING</span>
-        </h1>
-        <p className="lp-small lp-muted lp-auth-sub">Koçun, planların ve ilerlemen tek yerde.</p>
-      </div>
 
-      {error && (
-        <div className="lp-panel lp-auth-error">⚠ {error}</div>
-      )}
-
-      <div className="lp-panel lp-auth-panel">
-        <form onSubmit={handleLogin}>
-          <div className="lp-form-field">
-            <label htmlFor="login-email">E-posta</label>
-            <input
-              id="login-email"
-              type="email"
-              value={email}
-              onChange={handleEmailChange}
-              placeholder="ornek@eposta.com"
-              required
-              autoComplete="email"
-            />
-            {emailError && <p className="lp-auth-field-error">{emailError}</p>}
+        {error && (
+          <div className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-primary-glow">
+            ⚠ {error}
           </div>
+        )}
 
-          <div className="lp-form-field">
-            <label htmlFor="login-password">Şifre</label>
-            <input
-              id="login-password"
-              type="password"
-              value={password}
-              onChange={handlePasswordChange}
-              placeholder="••••••••"
-              required
-              minLength={8}
-              autoComplete="current-password"
-            />
-            {passwordError && <p className="lp-auth-field-error">{passwordError}</p>}
-          </div>
+        <form onSubmit={handleLogin} className="surface-card space-y-4 p-5">
+          <label className="block">
+            <span className="eyebrow text-muted-foreground">E-posta</span>
+            <div className="relative mt-2">
+              <Mail
+                size={17}
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                required
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={handleEmailChange}
+                placeholder="ornek@eposta.com"
+                className="h-13 w-full rounded-xl border border-input bg-surface px-4 py-3.5 pl-11 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+              />
+            </div>
+            {emailError && <span className="mt-1 block text-[11px] text-primary-glow">{emailError}</span>}
+          </label>
 
-          <button type="submit" disabled={loading} className="lp-primary">
-            {loading ? 'Doğrulanıyor...' : 'Giriş yap ›'}
+          <label className="block">
+            <span className="eyebrow text-muted-foreground">Şifre</span>
+            <div className="relative mt-2">
+              <Lock
+                size={17}
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                required
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={handlePasswordChange}
+                placeholder="••••••••"
+                className="h-13 w-full rounded-xl border border-input bg-surface px-4 py-3.5 pl-11 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
+              />
+            </div>
+            {passwordError && <span className="mt-1 block text-[11px] text-primary-glow">{passwordError}</span>}
+          </label>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="ember ember-glow flex h-13 w-full items-center justify-center gap-2 rounded-xl text-base font-bold active:scale-[0.99] disabled:opacity-60"
+          >
+            {loading ? 'Doğrulanıyor...' : 'Giriş yap'} <ArrowRight size={18} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage('register')}
+            className="flex h-13 w-full items-center justify-center rounded-xl border border-border bg-surface text-base font-semibold active:scale-[0.99]"
+          >
+            Yeni hesap oluştur
           </button>
         </form>
 
-        <div className="lp-divider">
-          <i />
-          VEYA
-          <i />
-        </div>
-
-        <button
-          onClick={() => setCurrentPage('register')}
-          className="lp-ghost"
-          style={{ width: '100%' }}
-        >
-          Yeni hesap oluştur
-        </button>
+        <p className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <ShieldCheck size={14} /> Verilerin şifreli saklanır
+        </p>
       </div>
-
-      <p className="lp-small lp-muted lp-auth-footnote">Güvenli bağlantı · verilerin sana ait</p>
-    </div>
+    </main>
   );
 }

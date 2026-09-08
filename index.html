@@ -1,20 +1,25 @@
 <!doctype html>
-<html lang="en">
+<html lang="tr" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0e0e14" />
+    <meta name="theme-color" content="#1a1211" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Lumiere" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap"
+    />
     <!-- PROMPT 8: istemci tarafı savunma derinliği. Gerçek/asal CSP backend tarafından
-         HTTP başlığı olarak gönderilir (bkz. backend/middleware.py::SecurityHeadersMiddleware);
-         bu meta etiket, statik olarak sunulan build çıktısı için ek bir koruma katmanıdır. -->
+         HTTP başlığı olarak gönderilir (bkz. backend/middleware.py::SecurityHeadersMiddleware). -->
     <!-- Capacitor iOS uygulaması API'ye ayrı origin üzerinden bağlanır. Bu adres
          connect-src'ta yer almazsa WKWebView fetch'i ağ isteği göndermeden
          TypeError: Load failed ile engeller. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://lumiere-api-ea82.onrender.com http://localhost:8000 http://192.168.0.3:8000 http://192.168.0.5:8000 http://192.168.0.7:8000 ws://localhost:5173; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; frame-ancestors 'none';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://lumiere-api-ea82.onrender.com http://localhost:8000 http://192.168.0.3:8000 http://192.168.0.5:8000 http://192.168.0.7:8000 ws://localhost:5173; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; object-src 'none'; frame-ancestors 'none';" />
     <title>Lumiere Coaching</title>
   </head>
   <body>
