@@ -1,16 +1,18 @@
-import { useState, useCallback } from 'react';
-import { Send, Settings, LogOut, Square, ChevronRight } from 'lucide-react';
+import { useMemo } from 'react';
+import {
+  ChevronRight, Dumbbell, Flame, Camera, Sparkles, TrendingDown,
+  LineChart, LogOut, ShieldCheck,
+} from 'lucide-react';
+import PageHeader from './lumiere/PageHeader';
+import ProgressRing from './lumiere/ProgressRing';
+import * as authService from '../services/authService';
+
+const TR_DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
 
 /**
- * FlowScreen - "Akış" ekranı (akışüst.png / akışalt.png birebir karşılığı)
- *
- * Yapı (mockup sırası):
- * 1. Header: LUMIERE COACHING + "31 Agu 2026 · 1. gün" + ayarlar & çıkış butonları
- * 2. Hero kart: "BUGÜNÜN ODAĞI" / "Pazartesi · Üst itişi" + kırmızı "Antrenmanı aç ›"
- *    + ilerleme çizgisi ve büyük "%" göstergesi
- * 3. Jarvis paneli: "LUMIERE YANINDA" / "Bugün nasıl hissediyorsun?" + giriş
- * 4. Günlük durum: KALORİ / PROTEİN / ANTRENMAN ring'leri
- * 5. HIZLI AKSİYONLAR: Yemek analizi + Video analizi kartları
+ * Ana akış ekranı — love repo `src/routes/app.flow.tsx` tasarımı.
+ * Veriler gerçek backend'den gelir (App.jsx çekiyor):
+ * profile: /api/profile · workout: /api/workout · nutritionPlans: /api/nutrition
  */
 export default function FlowScreen({
   profile,
@@ -22,221 +24,190 @@ export default function FlowScreen({
   onOpenSettings,
   onLogout,
   memberSinceLabel,
+  isAdmin,
+  onOpenAdmin,
 }) {
-  const [jarvisInput, setJarvisInput] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const firstName = (authService.getStoredUser()?.full_name || '').trim().split(' ')[0] || 'Sporcu';
 
-  // Quick Jarvis message handler → mesajı chat sekmesine taşı
-  const handleJarvisSubmit = useCallback(
-    async (e) => {
-      e?.preventDefault?.();
-      const message = jarvisInput.trim();
-      if (!message || isProcessing) return;
-      setIsProcessing(true);
-      try {
-        onSetChatMessage?.(message);
-        onNavigateTab?.('chat');
-        onQuickAction?.('chat', { message });
-      } catch (error) {
-        console.error('Jarvis navigation error:', error);
-      } finally {
-        setJarvisInput('');
-        setIsProcessing(false);
-      }
-    },
-    [jarvisInput, isProcessing, onNavigateTab, onSetChatMessage, onQuickAction]
-  );
+  const programs = workout?.programs || [];
+  const todayLogs = workout?.today_logs || [];
 
-  // Hızlı aksiyonlar → ilgili sekmeye götür
-  const handleNutritionPhoto = useCallback(() => {
-    onQuickAction?.('nutrition-photo');
-    onNavigateTab?.('nutrition');
-  }, [onNavigateTab, onQuickAction]);
+  // Bugünün program günü: önce gün adına göre eşle, olmazsa sırayla dön.
+  const todayProgram = useMemo(() => {
+    if (!programs.length) return null;
+    const todayName = TR_DAYS[(new Date().getDay() + 6) % 7];
+    const byName = programs.find((p) => (p.day_name || '').toLowerCase().includes(todayName.toLowerCase()));
+    return byName || programs[(new Date().getDay() + 6) % 7 % programs.length];
+  }, [programs]);
 
-  const handleFormPhoto = useCallback(() => {
-    onQuickAction?.('form-photo');
-    onNavigateTab?.('workout');
-  }, [onNavigateTab, onQuickAction]);
+  const consumedCal = (nutritionPlans || []).reduce((s, m) => s + (m.calories || 0), 0);
+  const consumedProt = (nutritionPlans || []).reduce((s, m) => s + (m.target_protein ?? m.protein ?? 0), 0);
+  const targetCal = profile?.daily_calorie_target || 2200;
+  const targetProt = profile?.daily_protein_target || 140;
+  const todayTargetSets = (todayProgram?.exercises || []).reduce((s, e) => s + (e.target_sets || 0), 0);
 
-  const targetCalories = profile?.daily_calorie_target || 2200;
-  const targetProtein = profile?.daily_protein_target || 140;
-  const consumedCalories = (nutritionPlans || []).reduce((sum, plan) => sum + (plan.calories || 0), 0);
-  const consumedProtein = (nutritionPlans || []).reduce((sum, plan) => sum + (plan.target_protein || 0), 0);
+  const rings = [
+    { value: Math.round(consumedCal), target: targetCal, label: 'Kalori', unit: 'kcal', tone: 'primary' },
+    { value: Math.round(consumedProt), target: targetProt, label: 'Protein', unit: 'g', tone: 'success' },
+    { value: todayLogs.length, target: todayTargetSets, label: 'Antrenman', unit: 'set', tone: 'warning' },
+  ];
 
-  const hasActiveProgram = workout?.programs?.length > 0;
-  const todayWorkoutCount = workout?.today_logs?.length || 0;
-  const dayNames = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
-  const todayName = dayNames[new Date().getDay()];
-  const heroProgram =
-    workout?.programs?.find((program) =>
-      program.day_name?.toLocaleLowerCase('tr-TR').includes(todayName.toLocaleLowerCase('tr-TR'))
-    ) || workout?.programs?.[0];
-  const heroExerciseCount = heroProgram?.exercises?.length || 0;
-  const heroProgress =
-    heroExerciseCount > 0 ? Math.min(Math.round((todayWorkoutCount / heroExerciseCount) * 100), 100) : 0;
-  const focusText = heroProgram?.focus
-    ? heroProgram.focus.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-    : '';
-  const heroTitle = heroProgram?.day_name
-    ? `${heroProgram.day_name} · ${focusText || 'Üst itiş'}`
-    : 'Pazartesi · Üst itiş\n(Göğüs / Omuz)';
+  const goChat = () => {
+    onSetChatMessage?.('');
+    onNavigateTab?.('chat');
+  };
 
   return (
-    <div className="min-h-0">
-      {/* 1. HEADER - marka + üyelik + ayarlar/çıkış (mockup akışüst) */}
-      <header
-        className="lp-phone-header"
-        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 18px * var(--lp-scale))' }}
-      >
-        <div className="lp-brand">
-          <div className="lp-brand-mark">
-            <Square strokeWidth={2.5} style={{ width: 'calc(18px * var(--lp-scale))', height: 'calc(18px * var(--lp-scale))' }} />
-          </div>
-          <div className="min-w-0">
-            <div className="lp-brand-name">
-              LUMIERE <b>COACHING</b>
+    <main>
+      <PageHeader
+        eyebrow={`Merhaba ${firstName}`}
+        title="Bugünün akışı"
+        onOpenSettings={onOpenSettings}
+        action={isAdmin && (
+          <button
+            type="button"
+            onClick={onOpenAdmin}
+            aria-label="Yönetim paneli"
+            className="grid h-10 w-10 place-items-center rounded-full border border-border bg-surface text-primary-glow active:scale-95"
+          >
+            <ShieldCheck size={18} />
+          </button>
+        )}
+      />
+
+      {/* Bugünün odağı — gerçek program verisi */}
+      <section className="surface-card relative overflow-hidden p-5">
+        <div className="hero-bg absolute inset-0 opacity-90" aria-hidden />
+        <div className="relative">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+            <div className="min-w-0">
+              <p className="eyebrow text-primary-glow">Bugünün odağı</p>
+              <h2 className="mt-1 text-2xl font-extrabold leading-tight">
+                {todayProgram ? todayProgram.day_name : 'Dinlenme'}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {todayProgram
+                  ? `${todayProgram.exercises.length} hareket · ~${Math.max(todayProgram.exercises.length * 10, 20)} dk`
+                  : 'Program oluşturulmadı'}
+              </p>
             </div>
-            <div className="lp-member-since">{memberSinceLabel || '31 Ağu 2026 · 1. gün'}</div>
+            <span className="ember grid h-12 w-12 shrink-0 place-items-center rounded-2xl">
+              <Dumbbell size={22} />
+            </span>
+          </div>
+
+          <div className="mt-5 h-2 overflow-hidden rounded-full bg-secondary">
+            <div
+              className="ember h-full rounded-full transition-all duration-500"
+              style={{ width: `${todayTargetSets ? Math.min((todayLogs.length / todayTargetSets) * 100, 100) : 0}%` }}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onNavigateTab?.('workout')}
+            className="ember ember-glow mt-4 flex h-12 w-full items-center justify-center gap-1.5 rounded-xl text-sm font-bold active:scale-[0.99]"
+          >
+            {todayProgram ? 'Antrenmanı başlat' : 'Program oluştur'} <ChevronRight size={17} />
+          </button>
+        </div>
+      </section>
+
+      {/* Günlük durum halkaları — gerçek /api/nutrition + /api/workout verisi */}
+      <section className="surface-card mt-4 p-5">
+        <p className="eyebrow mb-4 text-muted-foreground">Günlük durum</p>
+        <div className="grid grid-cols-3 gap-2">
+          {rings.map((r) => (
+            <ProgressRing
+              key={r.label}
+              value={r.value}
+              target={r.target}
+              label={r.label}
+              unit={r.unit}
+              tone={r.tone}
+              size={84}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* AI koç köprüsü */}
+      <section className="surface-card mt-4 p-5">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+          <span className="ember grid h-11 w-11 shrink-0 place-items-center rounded-2xl">
+            <Sparkles size={19} />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold">Lumiere yanında</p>
+            <p className="truncate text-xs text-muted-foreground">Bugün nasıl hissediyorsun?</p>
           </div>
         </div>
-        <div className="lp-header-actions">
-          <button type="button" className="lp-icon-button" aria-label="Ayarlar" onClick={() => onOpenSettings?.()}>
-            <Settings strokeWidth={2.25} style={{ width: 'calc(16px * var(--lp-scale))', height: 'calc(16px * var(--lp-scale))' }} />
-          </button>
-          <button type="button" className="lp-icon-button" aria-label="Çıkış yap" onClick={() => onLogout?.()}>
-            <LogOut strokeWidth={2.25} style={{ width: 'calc(16px * var(--lp-scale))', height: 'calc(16px * var(--lp-scale))' }} />
-          </button>
-        </div>
-      </header>
-
-      {/* 2. HERO - kırmızı gradyan kart + kırmızı buton (mockup akışüst) */}
-      <section className="lp-hero">
-        <p className="lp-section-kicker">Bugünün odağı</p>
-        <h2 style={{ whiteSpace: 'pre-line' }}>{heroTitle}</h2>
-        <p>
-          {hasActiveProgram
-            ? `${heroExerciseCount} egzersizle bugün gücünü ve hareket kaliteni geliştir.`
-            : '5 egzersizle bugün gücünü ve hareket kaliteni geliştir.'}
-        </p>
-        <button type="button" onClick={() => onNavigateTab?.('workout')} className="lp-primary">
-          Antrenmanı aç <ChevronRight strokeWidth={2.5} />
-        </button>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'calc(10px * var(--lp-scale))',
-            marginTop: 'calc(14px * var(--lp-scale))',
-          }}
+        <button
+          type="button"
+          onClick={goChat}
+          className="mt-4 flex h-12 w-full items-center justify-between rounded-xl border border-border bg-surface px-4 text-sm text-muted-foreground"
         >
-          <div className="lp-progress-line" style={{ flex: 1 }}>
-            <b style={{ width: `${heroProgress}%` }} />
-          </div>
-          <strong style={{ fontSize: 'calc(13px * var(--lp-scale))', fontWeight: 900, letterSpacing: '-0.04em' }}>
-            {heroProgress}%
-          </strong>
-        </div>
+          Koçuna bir şey sor... <ChevronRight size={17} />
+        </button>
       </section>
 
-      {/* 3. LUMIERE YANINDA - Jarvis giriş paneli */}
-      <section className="lp-panel" style={{ marginTop: 'calc(12px * var(--lp-scale))' }}>
-        <div className="lp-panel-heading">
-          <div className="min-w-0">
-            <p className="lp-section-kicker">Lumiere yanında</p>
-            <strong className="block mt-0.5">Bugün nasıl hissediyorsun?</strong>
-          </div>
-          <span>✦</span>
-        </div>
-        <form onSubmit={handleJarvisSubmit} className="lp-jarvis-input">
-          <input
-            type="text"
-            value={jarvisInput}
-            onChange={(e) => setJarvisInput(e.target.value)}
-            placeholder="Lumiere'e bir şey sor..."
-            disabled={isProcessing}
-            className="flex-1 min-w-0 bg-transparent border-0 focus:outline-none text-neutral-100 placeholder:text-[#656571] disabled:opacity-50"
-            style={{ fontSize: 'calc(11px * var(--lp-scale))' }}
-          />
-          <button type="submit" className="lp-send" aria-label="Gönder" disabled={isProcessing || !jarvisInput.trim()}>
-            <Send strokeWidth={2.5} style={{ width: 'calc(14px * var(--lp-scale))', height: 'calc(14px * var(--lp-scale))' }} />
-          </button>
-        </form>
+      {/* Hızlı aksiyonlar */}
+      <section className="mt-4 grid grid-cols-2 gap-3">
+        <button type="button" onClick={() => onNavigateTab?.('nutrition')} className="surface-card p-4 text-left">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/15 text-primary-glow">
+            <Flame size={18} />
+          </span>
+          <p className="mt-3 text-sm font-bold">Öğün ekle</p>
+          <p className="text-xs text-muted-foreground">{Math.round(consumedCal)} / {targetCal} kcal</p>
+        </button>
+        <button type="button" onClick={() => onNavigateTab?.('nutrition')} className="surface-card p-4 text-left">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-success/15 text-success">
+            <Camera size={18} />
+          </span>
+          <p className="mt-3 text-sm font-bold">Foto analizi</p>
+          <p className="text-xs text-muted-foreground">Makroları otomatik bul</p>
+        </button>
       </section>
 
-      {/* 4. GÜNLÜK DURUM - ring'li statlar (KALORİ / PROTEİN / ANTRENMAN) */}
-      <section className="lp-panel">
-        <div className="lp-panel-heading">
+      {/* Kilo değişimi + gelişim köprüsü */}
+      <section className="surface-card mt-4 p-5">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
           <div className="min-w-0">
-            <p className="lp-section-kicker">Günlük durum</p>
-            <strong className="block mt-0.5">Vücudunu dinle.</strong>
+            <p className="eyebrow text-muted-foreground">Kilo değişimi</p>
+            <p className="mt-1 text-2xl font-extrabold">
+              {profile?.current_weight ? `${profile.current_weight} kg` : '—'}
+            </p>
+          </div>
+          <span className="flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-3 py-1.5 text-xs font-bold text-success">
+            <TrendingDown size={14} /> {profile?.target_weight ? `Hedef ${profile.target_weight} kg` : 'Hedef —'}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => onNavigateTab?.('progress')}
+          className="mt-4 flex h-12 w-full items-center justify-between rounded-xl border border-border bg-surface px-4 text-sm font-semibold"
+        >
+          <span className="flex items-center gap-2"><LineChart size={16} className="text-primary-glow" /> Grafiklerini gör</span>
+          <ChevronRight size={17} className="text-muted-foreground" />
+        </button>
+      </section>
+
+      {/* Üyelik / oturum */}
+      <section className="surface-card mt-4 mb-2 p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="eyebrow text-muted-foreground">Üyelik</p>
+            <p className="mt-1 truncate text-sm font-bold">{memberSinceLabel || 'Lumiere üyesi'}</p>
           </div>
           <button
             type="button"
-            onClick={() => onNavigateTab?.('nutrition')}
-            className="shrink-0 transition-opacity hover:opacity-80"
-            style={{ color: 'var(--lp-red-2)', fontSize: 'calc(10px * var(--lp-scale))', fontWeight: 700 }}
+            onClick={onLogout}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-xs font-bold text-muted-foreground active:scale-95"
           >
-            Detaylar ›
-          </button>
-        </div>
-        <div className="lp-stats">
-          <div className="lp-stat">
-            <div className="lp-ring red">{consumedCalories.toFixed(0)}</div>
-            <label>Kalori</label>
-            <div className="lp-small lp-muted">/ {targetCalories} kcal</div>
-          </div>
-          <div className="lp-stat">
-            <div className="lp-ring green">{consumedProtein.toFixed(0)}g</div>
-            <label>Protein</label>
-            <div className="lp-small lp-muted">/ {targetProtein}g</div>
-          </div>
-          <button type="button" onClick={() => onNavigateTab?.('workout')} className="lp-stat" aria-label="Antrenman sekmesine git">
-            <div className="lp-ring">+</div>
-            <label>Antrenman</label>
-            <div className="lp-small lp-muted">
-              {hasActiveProgram ? (todayWorkoutCount > 0 ? `${todayWorkoutCount} set` : 'Hazır') : 'Oluştur ›'}
-            </div>
+            <LogOut size={13} /> Çıkış
           </button>
         </div>
       </section>
-
-      {/* 5. HIZLI AKSİYONLAR (mockup akışalt) */}
-      <p className="lp-section-kicker" style={{ margin: 'calc(17px * var(--lp-scale)) 2px calc(8px * var(--lp-scale))' }}>
-        Hızlı aksiyonlar
-      </p>
-      <div className="lp-quick-grid">
-        <button
-          type="button"
-          className="lp-quick green"
-          onClick={handleNutritionPhoto}
-          aria-label="Yemek analizi"
-        >
-          <span className="lp-quick-icon">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="4" />
-              <rect x="8" y="8" width="8" height="8" rx="1.5" />
-            </svg>
-          </span>
-          <strong>Yemek analizi</strong>
-          <p>Fotoğraftan makro ve kalori</p>
-        </button>
-        <button
-          type="button"
-          className="lp-quick"
-          onClick={handleFormPhoto}
-          aria-label="Video analizi"
-        >
-          <span className="lp-quick-icon">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="9" />
-              <circle cx="12" cy="12" r="5" />
-              <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-            </svg>
-          </span>
-          <strong>Video analizi</strong>
-          <p>Postür, kas dengesi, hareket</p>
-        </button>
-      </div>
-    </div>
+    </main>
   );
 }
