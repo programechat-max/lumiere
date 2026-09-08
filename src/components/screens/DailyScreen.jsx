@@ -16,6 +16,7 @@ export default function DailyScreen({
   workout,
   heatmap,
   profile,
+  onOpenSettings,
 }) {
   const summary = nutrition?.summary || { calories: 0, protein: 0, carbs: 0, fats: 0 };
   const meals = nutrition?.meals || [];
@@ -58,7 +59,7 @@ export default function DailyScreen({
 
   return (
     <main>
-      <PageHeader eyebrow="Günlük takip" title="İlerlemen" showSettings={false} />
+      <PageHeader eyebrow="Günlük takip" title="İlerlemen" onOpenSettings={onOpenSettings} />
 
       {/* Tarih gezgini */}
       <section className="surface-card flex items-center justify-between gap-2 p-3">

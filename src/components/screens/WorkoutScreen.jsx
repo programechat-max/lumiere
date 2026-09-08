@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  ArrowLeft, Check, ChevronRight, Dumbbell, Sparkles, Timer, TrendingUp, TriangleAlert,
+  ArrowLeft, Check, ChevronRight, Dumbbell, Settings2, Sparkles, Timer, TrendingUp, TriangleAlert,
 } from 'lucide-react';
 import PageHeader from '../lumiere/PageHeader';
 
@@ -17,6 +17,7 @@ export default function WorkoutScreen({
   generatingProgram,
   onGenerateProgram,
   metrics,
+  onOpenSettings,
 }) {
   const programs = workout?.programs || [];
   const todayLogs = workout?.today_logs || [];
@@ -44,7 +45,7 @@ export default function WorkoutScreen({
   if (!programs.length) {
     return (
       <main>
-        <PageHeader eyebrow="Antrenman programı" title="Haftalık plan" showSettings={false} />
+        <PageHeader eyebrow="Antrenman programı" title="Haftalık plan" onOpenSettings={onOpenSettings} />
         <section className="surface-card mt-8 flex flex-col items-center p-8 text-center">
           <span className="ember grid h-14 w-14 place-items-center rounded-2xl">
             <Dumbbell size={24} />
@@ -88,7 +89,7 @@ export default function WorkoutScreen({
 
     return (
       <main>
-        <header className="sticky top-0 z-30 -mx-5 mb-4 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b border-border bg-background/85 px-5 pb-3 pad-safe-top backdrop-blur-xl">
+        <header className="sticky top-0 z-30 -mx-5 mb-4 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border bg-background/85 px-5 pb-3 pad-safe-top backdrop-blur-xl">
           <button
             type="button"
             onClick={() => { setSelectedIdx(null); setDoneSets({}); }}
@@ -101,6 +102,14 @@ export default function WorkoutScreen({
             <p className="eyebrow text-primary-glow">Antrenman günü</p>
             <h1 className="truncate text-xl font-extrabold">{selected.day_name}</h1>
           </div>
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            aria-label="Ayarlar"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border bg-surface text-muted-foreground active:scale-95"
+          >
+            <Settings2 size={18} />
+          </button>
         </header>
 
         <section className="surface-card p-5">
@@ -165,7 +174,7 @@ export default function WorkoutScreen({
   // Gün listesi
   return (
     <main>
-      <PageHeader eyebrow="Antrenman programı" title="Haftalık plan" showSettings={false} />
+      <PageHeader eyebrow="Antrenman programı" title="Haftalık plan" onOpenSettings={onOpenSettings} />
 
       {deloadStatus?.needs_deload && (
         <section className="mb-4 flex items-start gap-2.5 rounded-xl border border-warning/40 bg-warning/10 p-3.5">

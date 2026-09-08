@@ -61,6 +61,8 @@ export default function DashboardMaster() {
   const [loading, setLoading] = useState(authService.isAuthenticated());
   const [activeTab, setActiveTab] = useState('flow');
   const activeTabRef = useRef('flow');
+  // Sekme geçiş animasyon yönü: 'right' = soldan sağa ilerleme, 'left' = geri dönüş
+  const [slideDir, setSlideDir] = useState('right');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   // Kamera/mikrofon için kullanıcının kalıcı rıza kararı (/api/status'tan gelir).
@@ -107,9 +109,38 @@ const navigateToTab = useCallback((nextTab) => {
     if (!NAV_KEYS.includes(nextTab) && nextTab !== 'progress') return;
     const previousTab = activeTabRef.current;
     if (previousTab === nextTab) return;
+    // Yönlü animasyon: sekme sırasında ileri gidiş 'right', geri dönüş 'left'
+    const prevIdx = NAV_KEYS.indexOf(previousTab);
+    const nextIdx = NAV_KEYS.indexOf(nextTab);
+    if (prevIdx !== -1 && nextIdx !== -1) setSlideDir(nextIdx > prevIdx ? 'right' : 'left');
     activeTabRef.current = nextTab;
     setActiveTab(nextTab);
   }, []);
+
+  // --- Sağa/sola kaydırma (swipe) ile sekme geçişi ---
+  const touchStartRef = useRef(null);
+
+  const handleTouchStart = useCallback((e) => {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    // Yatay kaydırılabilir öğelerde (hızlı öneri çipleri) swipe'ı devre dışı bırak
+    if (e.target?.closest?.('.no-scrollbar, input, textarea')) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Yatay hareket baskın ve yeterince uzun olmalı
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+    const idx = NAV_KEYS.indexOf(activeTabRef.current);
+    if (idx === -1) return;
+    const next = dx < 0 ? NAV_KEYS[idx + 1] : NAV_KEYS[idx - 1];
+    if (next) navigateToTab(next);
+  }, [navigateToTab]);
 
 const handleQuickAction = useCallback((action) => {
     // Flow ekranından gelen hızlı aksiyonlar → ilgili sekmeye yönlendir
@@ -557,8 +588,14 @@ const shiftSelectedDate = (deltaDays) => {
   // CANLI DASHBOARD (love repo app.tsx kabuğu)
   // ==========================================
   return (
-    <div className="min-h-dvh bg-background">
-      <div className="mx-auto min-h-dvh w-full max-w-md px-5 pb-28">
+    <div
+      className="min-h-dvh bg-background"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div className="mx-auto min-h-dvh w-full max-w-md px-5 pb-24">
+        {/* Sekme geçiş animasyonu: key değişince remount + yönlü slide-in */}
+        <div key={activeTab} className={slideDir === 'left' ? 'page-in-left' : 'page-in-right'}>
         {activeTab === 'flow' && (
           <FlowScreen
             profile={profile}
@@ -583,6 +620,7 @@ const shiftSelectedDate = (deltaDays) => {
             onInputChange={setChatInput}
             onSubmit={sendChatMessage}
             chatEndRef={chatEndRef}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
 
@@ -596,6 +634,7 @@ const shiftSelectedDate = (deltaDays) => {
             workout={dailyWorkout}
             heatmap={dailyHeatmap}
             profile={profile}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
 
@@ -607,6 +646,7 @@ const shiftSelectedDate = (deltaDays) => {
             generatingProgram={generatingProgram}
             onGenerateProgram={generateWorkoutProgram}
             metrics={metrics}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
 
@@ -625,6 +665,7 @@ const shiftSelectedDate = (deltaDays) => {
             onConfirmPhoto={confirmFoodPhoto}
             onCancelPhoto={() => { setFoodPhotoPreview(null); setFoodPhotoError(''); }}
             profile={profile}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         )}
 
@@ -643,10 +684,12 @@ const shiftSelectedDate = (deltaDays) => {
             onWeightInputChange={setWeightInput}
             onSubmitWeight={submitWeight}
             onRunAnalysis={runWeeklyAnalysis}
+            onOpenSettings={() => setSettingsOpen(true)}
             targetCalories={targetCalories}
             targetProtein={targetProtein}
           />
         )}
+        </div>
 
         <SettingsMenu
           open={settingsOpen}

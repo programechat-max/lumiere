@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Send, Sparkles } from 'lucide-react';
+import { Send, Settings2, Sparkles } from 'lucide-react';
 
 const quick = ['Protein hedefim?', 'Bugün ne yemeliyim?', 'Kaslarım ağrıyor'];
 
@@ -7,7 +7,7 @@ const quick = ['Protein hedefim?', 'Bugün ne yemeliyim?', 'Kaslarım ağrıyor'
  * Chat ekranı — love repo `src/routes/app.chat.tsx` tasarımı.
  * Backend: /api/chat + /api/chat/history (App.jsx'te çekilir).
  */
-export default function ChatScreen({ messages, input, sending, onInputChange, onSubmit, chatEndRef }) {
+export default function ChatScreen({ messages, input, sending, onInputChange, onSubmit, chatEndRef, onOpenSettings }) {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages]);
@@ -16,7 +16,7 @@ export default function ChatScreen({ messages, input, sending, onInputChange, on
 
   return (
     <main className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-30 -mx-5 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b border-border bg-background/85 px-5 pb-3 pad-safe-top backdrop-blur-xl">
+      <header className="sticky top-0 z-30 -mx-5 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border bg-background/85 px-5 pb-3 pad-safe-top backdrop-blur-xl">
         <span className="ember grid h-11 w-11 shrink-0 place-items-center rounded-2xl">
           <Sparkles size={19} />
         </span>
@@ -26,6 +26,14 @@ export default function ChatScreen({ messages, input, sending, onInputChange, on
             <span className="h-1.5 w-1.5 rounded-full bg-success" /> Çevrimiçi
           </p>
         </div>
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          aria-label="Ayarlar"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border bg-surface text-muted-foreground active:scale-95"
+        >
+          <Settings2 size={18} />
+        </button>
       </header>
 
       <div className="flex-1 space-y-3 py-5">

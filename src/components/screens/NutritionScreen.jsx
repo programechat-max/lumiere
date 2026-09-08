@@ -22,6 +22,7 @@ export default function NutritionScreen({
   onConfirmPhoto,
   onCancelPhoto,
   profile,
+  onOpenSettings,
 }) {
   const logs = nutritionPlans || [];
   const plan = mealPlan || [];
@@ -35,7 +36,7 @@ export default function NutritionScreen({
 
   return (
     <main>
-      <PageHeader eyebrow="Beslenme takibi" title="Beslenme" showSettings={false} />
+      <PageHeader eyebrow="Beslenme takibi" title="Beslenme" onOpenSettings={onOpenSettings} />
 
       {/* Kalori özeti */}
       <section className="surface-card relative overflow-hidden p-5">

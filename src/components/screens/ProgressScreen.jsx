@@ -25,6 +25,7 @@ export default function ProgressScreen({
   onWeightInputChange,
   onSubmitWeight,
   onRunAnalysis,
+  onOpenSettings,
   targetCalories,
   targetProtein,
 }) {
@@ -49,7 +50,7 @@ export default function ProgressScreen({
 
   return (
     <main>
-      <PageHeader eyebrow="Gelişim takibi" title="Gelişimin" showSettings={false} />
+      <PageHeader eyebrow="Gelişim takibi" title="Gelişimin" onOpenSettings={onOpenSettings} />
 
       {/* Kilo kartı + giriş */}
       <section className="surface-card p-5">

@@ -16,7 +16,8 @@ const field =
  * Kayıt ekranı — love repo `src/routes/register.tsx` tasarımı + mevcut authService.
  * 1. adım: hesap bilgileri; 2. adım: üyelik planı seçimi (backend preferred_plan).
  */
-const [step, setStep] = useState(1);
+export default function Register({ setCurrentPage }) {
+  const [step, setStep] = useState(1);
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('FREE');
@@ -77,8 +78,8 @@ const [step, setStep] = useState(1);
       setLoading(false);
     }
   };
-export default function Register({ setCurrentPage }) {
-return (
+
+  return (
     <main className="hero-bg flex min-h-dvh flex-col justify-center px-5 py-10">
       <div className="mx-auto w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
