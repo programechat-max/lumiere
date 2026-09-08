@@ -26,7 +26,6 @@ const DATA_MUTATING_INTENTS = new Set([
   'daily_checkin',
 ]);
 
-const PROGRESSION_ICON = { increase_weight: '📈', hold_weight: '⏸️', add_reps: '➕', unknown_range: '❔' };
 // Header'da "üyelik başlangıcı"nı gösterirken kullanılır - örn. "15 Ağu 2026'dan beri · 12. gün"
 function formatMemberSince(isoDate) {
   try {
