@@ -54,74 +54,82 @@ export default function Login({ setCurrentPage }) {
   };
 
   return (
-    <div className="lp-auth-screen lp-column text-white min-h-screen relative">
-      <div style={{ textAlign: 'center' }}>
-        <div className="lp-brand-mark lp-auth-brand flex items-center justify-center">
-          <Cpu strokeWidth={2} />
-        </div>
-        <p className="lp-section-kicker">Kişisel performans alanın</p>
-        <h1 className="lp-screen-title lp-auth-title">
-          LUMIERE <span>COACHING</span>
-        </h1>
-        <p className="lp-small lp-muted lp-auth-sub">Koçun, planların ve ilerlemen tek yerde.</p>
-      </div>
+    <div className="auth-login-screen">
+      <main className="auth-login-container">
+        <header className="auth-login-header">
+          <div className="auth-login-brand" aria-hidden="true">
+            <Cpu strokeWidth={1.8} />
+          </div>
+          <p className="auth-login-eyebrow">KİŞİSEL PERFORMANS ALANIN</p>
+          <h1 className="auth-login-title">
+            LUMIERE <span>COACHING</span>
+          </h1>
+          <p className="auth-login-subtitle">Koçun, planların ve ilerlemen tek yerde.</p>
+        </header>
 
-      {error && (
-        <div className="lp-panel lp-auth-error">⚠ {error}</div>
-      )}
+        {error && (
+          <div className="auth-login-error" role="alert">⚠ {error}</div>
+        )}
 
-      <div className="lp-panel lp-auth-panel">
-        <form onSubmit={handleLogin}>
-          <div className="lp-form-field">
-            <label htmlFor="login-email">E-posta</label>
-            <input
-              id="login-email"
-              type="email"
-              value={email}
-              onChange={handleEmailChange}
-              placeholder="ornek@eposta.com"
-              required
-              autoComplete="email"
-            />
-            {emailError && <p className="lp-auth-field-error">{emailError}</p>}
+        <section className="auth-login-card">
+          <div className="auth-login-card-heading">
+            <p>TEKRAR HOŞ GELDİN</p>
+            <h2>Hedeflerine kaldığın yerden devam et.</h2>
           </div>
 
-          <div className="lp-form-field">
-            <label htmlFor="login-password">Şifre</label>
-            <input
-              id="login-password"
-              type="password"
-              value={password}
-              onChange={handlePasswordChange}
-              placeholder="••••••••"
-              required
-              minLength={8}
-              autoComplete="current-password"
-            />
-            {passwordError && <p className="lp-auth-field-error">{passwordError}</p>}
-          </div>
+          <form onSubmit={handleLogin} className="auth-login-form">
+            <div className="auth-login-field">
+              <label htmlFor="login-email">E-posta</label>
+              <input
+                className="auth-login-input"
+                id="login-email"
+                type="email"
+                value={email}
+                onChange={handleEmailChange}
+                placeholder="ornek@eposta.com"
+                required
+                autoComplete="email"
+              />
+              {emailError && <p className="auth-login-field-error">{emailError}</p>}
+            </div>
 
-          <button type="submit" disabled={loading} className="lp-primary">
-            {loading ? 'Doğrulanıyor...' : 'Giriş yap ›'}
+            <div className="auth-login-field">
+              <label htmlFor="login-password">Şifre</label>
+              <input
+                className="auth-login-input"
+                id="login-password"
+                type="password"
+                value={password}
+                onChange={handlePasswordChange}
+                placeholder="••••••••"
+                required
+                minLength={8}
+                autoComplete="current-password"
+              />
+              {passwordError && <p className="auth-login-field-error">{passwordError}</p>}
+            </div>
+
+            <button type="submit" disabled={loading} className="auth-login-submit">
+              {loading ? 'Doğrulanıyor...' : 'Giriş yap'}
+              {!loading && <span aria-hidden="true">→</span>}
+            </button>
+          </form>
+
+          <div className="auth-login-divider"><span>veya</span></div>
+
+          <button
+            onClick={() => setCurrentPage('register')}
+            className="auth-login-register"
+          >
+            Yeni hesap oluştur
+            <span aria-hidden="true">→</span>
           </button>
-        </form>
+        </section>
 
-        <div className="lp-divider">
-          <i />
-          VEYA
-          <i />
-        </div>
-
-        <button
-          onClick={() => setCurrentPage('register')}
-          className="lp-ghost"
-          style={{ width: '100%' }}
-        >
-          Yeni hesap oluştur
-        </button>
-      </div>
-
-      <p className="lp-small lp-muted lp-auth-footnote">Güvenli bağlantı · verilerin sana ait</p>
+        <p className="auth-login-footnote">
+          <span aria-hidden="true">●</span> Güvenli bağlantı · verilerin sana ait
+        </p>
+      </main>
     </div>
   );
 }
