@@ -46,6 +46,22 @@ Base.metadata.create_all(bind=engine)
 db_module.migrate_schema()
 
 
+@pytest.fixture(autouse=True)
+def _isolated_rate_limits():
+    """Her test hız sınırı sayaçlarını sıfırlanmış halde başlatır.
+
+    Rate limit deposu süreç-içi ve anahtar `plan:<feature>:<user_id>`; testler
+    aynı kullanıcı (id=1) ile çalıştığından bir testin tükettiği kota sonrakine
+    sızıyor ve ilgisiz uçlar 429 dönüyordu. Limitin kendi davranışı
+    test_platform_upgrade.test_rate_limit_blocks_after_threshold'da doğrulanır.
+    """
+    import rate_limit
+
+    rate_limit.reset_memory_store()
+    yield
+    rate_limit.reset_memory_store()
+
+
 @pytest.fixture
 def db_session():
     """Create a fresh database session for each test.

@@ -54,8 +54,24 @@ class _InMemoryStore:
             reset_in = window_start + window_seconds - now
             return entry[1], max(reset_in, 1)
 
+    def reset(self) -> None:
+        """Tüm sayaçları sıfırlar (test izolasyonu / operasyonel temizlik)."""
+        with self._lock:
+            self._data.clear()
+
 
 _memory_store = _InMemoryStore()
+
+
+def reset_memory_store() -> None:
+    """Süreç-içi sayaç deposunu boşaltır.
+
+    Testler aynı süreçte ve aynı kullanıcı kimliğiyle çalıştığı için önceki
+    testin tükettiği kota sonrakine sızar ve yanlış 429 üretirdi; bu yardımcı
+    her testin temiz bir pencereyle başlamasını sağlar. Redis kullanılıyorsa
+    oradaki sayaçlara dokunulmaz (paylaşılan durum, testlerin konusu değil).
+    """
+    _memory_store.reset()
 
 
 class RateLimitResult:
