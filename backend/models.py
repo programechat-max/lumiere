@@ -148,6 +148,61 @@ class BodyMetric(Base):
     note = Column(Text, nullable=True)
 
 
+class BodyComposition(Base):
+    """InBody benzeri vücut kompozisyonu ölçümü geçmişi (Kişisel Bilgiler sayfası).
+
+    TÜM alanlar opsiyoneldir: kullanıcı yalnızca cihaz çıktısından okuyabildiği
+    değerleri girer, gerisi boş kalır. İlk kayıt profil oluşturma (onboarding)
+    sırasında "Vücut Analizi" adımında alınır; sonraki girişler gelişim takibi
+    serisini oluşturur.
+
+    Segment sırası cihaz konvansiyonuna uyar: sağ/sol bacak, sağ/sol kol, gövde.
+    'review' alanı Jarvis'in fark değerlendirmesini taşır:
+    {"sentiment": "positive"|"negative"|"neutral", "summary": str, "highlights": [str]}
+    Arayüzdeki kırmızı/yeşil renk YALNIZCA bu sentiment'e göre belirlenir.
+    """
+    __tablename__ = "body_composition"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    date = Column(Date, default=datetime.date.today, index=True)
+    source = Column(String, default="manual", nullable=False)  # manual | video
+
+    # --- Genel (toplam vücut) ---
+    body_fat_percent = Column(Float, nullable=True)   # yağ oranı %
+    total_fat_kg = Column(Float, nullable=True)       # toplam yağ kg
+    lean_mass_kg = Column(Float, nullable=True)       # yağ dışı kg
+    muscle_kg = Column(Float, nullable=True)          # kas kg
+    bone_mass_kg = Column(Float, nullable=True)       # kemik ağırlığı kg
+    body_water_kg = Column(Float, nullable=True)      # sıvı kg
+
+    # --- Segmentel yağ oranı (%) ---
+    right_leg_fat_percent = Column(Float, nullable=True)
+    left_leg_fat_percent = Column(Float, nullable=True)
+    right_arm_fat_percent = Column(Float, nullable=True)
+    left_arm_fat_percent = Column(Float, nullable=True)
+    trunk_fat_percent = Column(Float, nullable=True)
+
+    # --- Segmentel kas (kg) ---
+    right_leg_muscle_kg = Column(Float, nullable=True)
+    left_leg_muscle_kg = Column(Float, nullable=True)
+    right_arm_muscle_kg = Column(Float, nullable=True)
+    left_arm_muscle_kg = Column(Float, nullable=True)
+    trunk_muscle_kg = Column(Float, nullable=True)
+
+    # --- Segmentel yağ (kg) ---
+    right_leg_fat_kg = Column(Float, nullable=True)
+    left_leg_fat_kg = Column(Float, nullable=True)
+    right_arm_fat_kg = Column(Float, nullable=True)
+    left_arm_fat_kg = Column(Float, nullable=True)
+    trunk_fat_kg = Column(Float, nullable=True)
+
+    note = Column(Text, nullable=True)
+    # Jarvis'in fark değerlendirmesi — arayüz renklendirmesinin tek kaynağı.
+    review = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 class UserMemory(Base):
     """AI'nin kullanıcı hakkında öğrendiği kalıcı bilgiler / haftalık analiz sonuçları.
     Bu tablo Jarvis'in 'kullanıcıyı keşfetmesini' ve zamanla kişiselleşmesini sağlar."""

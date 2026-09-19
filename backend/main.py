@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from config import settings
 from database import engine, Base, get_db, migrate_schema
 import models, schemas, crud, auth, ai_core, jarvis_brain, progression
+import body_composition
 import billing_service
 import genai_client
 
@@ -303,9 +304,28 @@ def onboarding_complete(data: schemas.OnboardingCompleteRequest, current_user: m
     payload = data.model_dump(exclude_unset=True)
     video_analysis = payload.pop("video_analysis", None)
     voice_analysis = payload.pop("voice_analysis", None)
+    body_composition_payload = payload.pop("body_composition", None)
     updates = payload
     updates["onboarding_completed"] = True
     profile = crud.update_profile(db, updates, current_user.id)
+
+    # Onboarding "Vücut Analizi" adımı boş geçilmediyse ilk ölçüm kaydedilir.
+    # Bu kaydın tarihi kullanıcının Kişisel Bilgiler sayfasındaki ilk kayıt
+    # tarihidir ve gelişim serisinin başlangıcı sayılır. Jarvis'e ulaşılamazsa
+    # bile ölçüm kaydedilir (kural tabanlı yedek yorumla).
+    if isinstance(body_composition_payload, dict) and body_composition.has_any_value(body_composition_payload):
+        try:
+            first_record = crud.create_body_composition(
+                db,
+                schemas.BodyCompositionCreate(**{
+                    k: v for k, v in body_composition_payload.items()
+                    if k in body_composition.METRIC_KEYS or k in ("note", "date", "source")
+                }),
+                user_id=current_user.id,
+            )
+            ai_core.evaluate_body_composition(db, record=first_record, previous=None, user_id=current_user.id)
+        except Exception as exc:
+            logger.warning("[ONBOARDING] Vücut kompozisyonu ilk kaydı yazılamadı: %s", exc)
 
     # Medya sonucu yalnızca React state'inde kalmasın; sonraki oturumlarda da
     # program üreticisi ve Jarvis aynı somut analiz bağlamını kullanabilsin.
@@ -865,6 +885,47 @@ def list_body_metrics(days: int = None, current_user: models.User = Depends(auth
     if days is None:
         days = max((date.today() - current_user.created_at.date()).days + 1, 1)
     return crud.get_body_metrics(db, days=days, user_id=current_user.id)
+
+
+# ==========================================
+# VÜCUT KOMPOZİSYONU (Kişisel Bilgiler sayfası)
+# ==========================================
+def _body_composition_summary(db, user_id: int):
+    """Kişisel Bilgiler sayfası için tüm vücut kompozisyonu verisini hazırlar."""
+    records = crud.get_body_compositions(db, user_id=user_id)
+    return body_composition.build_summary(records)
+
+
+@app.get("/api/body-composition", response_model=schemas.BodyCompositionSummary)
+def get_body_composition(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    """Kişisel Bilgiler: ilk kayıt tarihi, güncel değerler, değişim rozetleri,
+    segmentel dağılım ve haftalık karşılaştırma tablosunun verisi."""
+    return _body_composition_summary(db, current_user.id)
+
+
+@app.post("/api/body-composition", response_model=schemas.BodyCompositionSummary)
+def add_body_composition(data: schemas.BodyCompositionCreate, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db), _rl: bool = Depends(enforce_plan_rate_limit("ai_body_composition"))):
+    """Yeni ölçüm kaydı (tüm alanlar opsiyonel).
+
+    Kayıt sonrası Jarvis önceki ölçümle karşılaştırıp yorum üretir; arayüzdeki
+    kırmızı/yeşil renk yalnızca bu yorumun sentiment'ine göre belirlenir.
+    Aynı gün tekrar giriş yapılırsa o günün kaydı güncellenir (upsert).
+    """
+    if not body_composition.has_any_value(data.model_dump(exclude_unset=True)):
+        raise HTTPException(status_code=422, detail="En az bir ölçüm değeri girmelisin.")
+
+    previous = crud.get_previous_body_composition(
+        db, user_id=current_user.id, before_date=data.date or date.today()
+    )
+    record = crud.create_body_composition(db, data, user_id=current_user.id)
+    try:
+        ai_core.evaluate_body_composition(
+            db, record=record, previous=previous, user_id=current_user.id
+        )
+    except Exception as exc:
+        # Yorum alınamazsa ölçüm yine de kayıtlıdır: kullanıcı verisini kaybetmesin.
+        logger.warning("[BODY_COMPOSITION] Jarvis yorumu üretilemedi: %s", exc)
+    return _body_composition_summary(db, current_user.id)
 
 
 # ==========================================

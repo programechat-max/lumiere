@@ -153,6 +153,55 @@ overload, internal moment arm, fatigue management vb.).
 """
 
 
+def body_composition_context_block(db, user_id=None) -> str:
+    """Kullanıcının güncel vücut kompozisyonu ölçümünü (genel + segmentel) prompt'a ekler.
+
+    Jarvis'in antrenman/beslenme kararlarında gerçek yağ ve bölgesel kas dağılımını
+    görebilmesi için TÜM girilen değerler aktarılır; boş alanlar hiç yazılmaz ki
+    eksik veri uydurma bir kesinlik izlenimi oluşturmasın. Son iki ölçüm arasındaki
+    fark da verilir; Jarvis ilerlemeyi sorgulandığında yorumlayabilir.
+    """
+    import body_composition as bc
+
+    records = crud.get_latest_body_compositions(db, user_id=user_id, count=2)
+    if not records:
+        return ""
+    latest = records[-1]
+    previous = records[-2] if len(records) > 1 else None
+
+    lines = []
+    for group in bc.METRIC_GROUPS:
+        values = [
+            f"{spec['label']}: {getattr(latest, spec['key'])} {spec['unit']}"
+            for spec in group["metrics"]
+            if getattr(latest, spec["key"], None) is not None
+        ]
+        if values:
+            lines.append(f"- {group['label']}: " + ", ".join(values))
+
+    diff_lines = []
+    if previous is not None:
+        for delta in bc.compare_records(previous, latest):
+            if delta["delta"] is not None and abs(delta["delta"]) >= bc.MIN_DELTA:
+                diff_lines.append(f"{delta['label']} {delta['delta_label']}")
+
+    review = latest.review if isinstance(latest.review, dict) else None
+    review_line = ""
+    if review and review.get("summary"):
+        review_line = f"\nSon ölçüm hakkındaki kendi değerlendirmen: {review['summary']}"
+
+    block = (
+        f"\n═══ VÜCUT KOMPOZİSYONU (ölçüm tarihi: {latest.date}"
+        + (f", önceki ölçüm: {previous.date}" if previous is not None else ", ilk ölçüm")
+        + ") ═══\n"
+        + "\n".join(lines) + "\n"
+    )
+    if diff_lines:
+        block += "Son iki ölçüm arasındaki değişim: " + ", ".join(diff_lines) + "\n"
+    block += review_line + "\n"
+    return block
+
+
 def build_system_prompt(db=None, user_id=None) -> str:
     """Kullanıcının profilini, son 7 günlük verilerini ve AI'nin biriktirdiği
     hafızayı okuyarak DİNAMİK bir system prompt üretir. Bu, uygulamanın
@@ -261,7 +310,12 @@ KULLANICI PROFİLİ:
         else:
             plan_block = "\n(Kayıtlı bir beslenme planı yok - kullanıcı 'planımdaki X'i yedim' derse plan olmadığını söyle ve ne yediğini sor.)\n"
 
-        return BASE_PERSONA + SCIENCE_PROTOCOLS + profile_block + memory_block + media_context_block + plan_block
+        body_block = body_composition_context_block(db, user_id)
+
+        return (
+            BASE_PERSONA + SCIENCE_PROTOCOLS + profile_block + memory_block
+            + media_context_block + plan_block + body_block
+        )
     finally:
         if own_session:
             db.close()
@@ -2314,6 +2368,87 @@ alanlarını null yap, summary'de bunu nazikçe belirt.
     except Exception as e:
         logger.error(f"[AI_CORE] Sesli onboarding profil çıkarım hatası: {e}")
         return {"transcript": transcript, "profile_updates": {}, "summary": "Anlattıklarını tam işleyemedim efendim, formdaki bilgilerle devam ediyorum."}
+    finally:
+        if own_session:
+            db.close()
+# ==========================================
+# VÜCUT KOMPOZİSYONU — JARVIS DEĞERLENDİRMESİ
+# ==========================================
+BODY_COMPOSITION_REVIEW_INSTRUCTION = """GÖREVİN: Kullanıcının iki vücut kompozisyonu ölçümünü
+(InBody benzeri: yağ oranı, segmentel kas/yağ dağılımı) karşılaştırıp 'efendim' diye hitap eden
+kısa bir koç değerlendirmesi yazmak ve bu ölçümün genel gidişatını tek kelimeyle etiketlemek.
+
+SADECE şu JSON'u dön, başka hiçbir şey yazma:
+{
+  "sentiment": "positive" | "negative" | "neutral",
+  "summary": "2-3 cümlelik değerlendirme. Yağ azalışı ve kas artışı olumlu; kas kaybı veya yağ
+    artışı olumsuzdur. Bölgesel asimetri (sağ/sol farkı) veya dikkat gerektiren bir segment varsa
+    mutlaka belirt. Ölçümler ölçüm gürültüsü seviyesindeyse 'neutral' de ve bunu söyle.",
+  "highlights": ["En önemli 2-4 değişim, kısa etiket (örn. 'Yağ oranı -1,8 %', 'Sol bacak kası +0,4 kg')"]
+}
+
+KURALLAR:
+- sentiment alanı arayüzdeki rozet rengini belirler; düşüş/artış yönüne DEĞİL, sporcu açısından
+  iyi mi kötü mü olduğuna göre karar ver. Kas kaybı bir düşüştür ama KIRMIZI olmalıdır.
+- Elinde iki ölçüm yoksa (ilk kayıt) sentiment 'neutral' ve summary kısa bir başlangıç notu olsun.
+- Sayı uydurma; yalnızca verilen değerleri kullan.
+"""
+
+
+def evaluate_body_composition(db=None, record=None, previous=None, user_id: int = None) -> dict:
+    """Yeni ölçümü öncekiyle karşılaştırıp Jarvis yorumunu üretir ve kayda yazar.
+
+    Arayüzdeki kırmızı/yeşil renk YALNIZCA bu yorumun 'sentiment' alanından gelir.
+    AI yapılandırılmamışsa veya hata verirse kural tabanlı yedeğe düşer; bu durumda
+    review.source = 'rule' olur ve arayüz yine çalışır (sessiz kalmaz).
+    """
+    import body_composition as bc
+
+    own_session = db is None
+    if own_session:
+        db = SessionLocal()
+    try:
+        deltas = bc.compare_records(previous, record)
+        if previous is None or _genai_client is None:
+            review = bc.rule_based_review(deltas)
+            if record is not None:
+                crud.save_body_composition_review(db, record, review)
+            return review
+
+        def _fmt(metric):
+            if metric["delta"] is None:
+                return f"{metric['label']}: {metric['previous']} -> {metric['current']} {metric['unit']}"
+            return f"{metric['label']}: {metric['previous']} -> {metric['current']} {metric['unit']} ({metric['delta_label']})"
+
+        comparison = "\n".join(_fmt(d) for d in deltas if d["delta"] is not None)
+        unchanged = [d["key"] for d in deltas if d["delta"] is None]
+        prompt = (
+            f"ÖNCEKİ ÖLÇÜM ({previous.date}):\n"
+            + "\n".join(
+                f"- {d['label']}: {d['previous']} {d['unit']}"
+                for d in deltas if d["previous"] is not None
+            )
+            + f"\n\nGÜNCEL ÖLÇÜM ({record.date}):\n"
+            + "\n".join(
+                f"- {d['label']}: {d['current']} {d['unit']}"
+                for d in deltas if d["current"] is not None
+            )
+            + f"\n\nDEĞİŞİMLER:\n{comparison or '(anlamlı değişim yok)'}"
+            + (f"\n\nNOT: İlk kez ölçülen alanlar (karşılaştırılamaz): {', '.join(unchanged)}" if unchanged else "")
+        )
+        try:
+            model = _GenerativeModel(MODEL_NAME, BODY_COMPOSITION_REVIEW_INSTRUCTION)
+            response = model.generate_content(
+                prompt, generation_config={"response_mime_type": "application/json", "temperature": 0.4}
+            )
+            review = bc.normalize_review(json.loads(response.text), deltas)
+        except Exception as exc:
+            logger.warning("[AI_CORE] Vücut kompozisyonu yorumu alınamadı, kural tabanlıya düşülüyor: %s", exc)
+            review = bc.rule_based_review(deltas)
+
+        if record is not None:
+            crud.save_body_composition_review(db, record, review)
+        return review
     finally:
         if own_session:
             db.close()

@@ -1,6 +1,11 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Any, Dict, List, Optional
 from datetime import date, datetime
+# NOT: Python 3.14 (PEP 649) anotasyonları tembel çözer ve sınıf gövdesindeki
+# adları önceliklendirir. Alan adı ile tip adı aynı olduğunda ('date: date')
+# varsayılan değerli alanlarda tip yanlışlıkla None'a çözülür; bu yüzden
+# 'date' alanının varsayılan aldığı şemalarda bu takma ad kullanılır.
+from datetime import date as date_cls
 # --- HESAP / AUTH ŞEMALARI ---
 class UserRegister(BaseModel):
     email: EmailStr
@@ -64,9 +69,15 @@ class UserProfileResponse(UserProfileBase):
 
 
 class OnboardingCompleteRequest(UserProfileBase):
-    """Temel profil ile birlikte onboarding medya analizlerinin kalıcı aktarımı."""
+    """Temel profil ile birlikte onboarding medya analizlerinin kalıcı aktarımı.
+
+    'body_composition' onboarding'deki "Vücut Analizi" adımında girilen ilk
+    ölçümdür (video analizinden ÖNCE toplanır); kayıt tarihi kullanıcının ilk
+    kişisel bilgi kaydı olur ve gelişim serisinin başlangıcı sayılır.
+    """
     video_analysis: Optional[Dict[str, Any]] = None
     voice_analysis: Optional[Dict[str, Any]] = None
+    body_composition: Optional[Dict[str, Any]] = None
 
 # --- HAREKET VE PROGRAM ŞEMALARI ---
 class ExerciseBase(BaseModel):
@@ -161,6 +172,113 @@ class BodyMetricResponse(BodyMetricCreate):
     date: date
     class Config:
         from_attributes = True
+
+# --- VÜCUT KOMPOZİSYONU ŞEMALARI (Kişisel Bilgiler sayfası) ---
+# Tüm alanlar opsiyonel: kullanıcı InBody benzeri cihaz çıktısından yalnızca
+# okuyabildiği değerleri girer. Sıfır/negatif değer fiziksel olarak anlamsız
+# olduğundan ge alanlarıyla elenir; üst sınır da saçma girişleri engeller.
+def _body_kg():
+    """0-400 kg aralığında opsiyonel gövde ölçüsü alanı.
+
+    Field() nesnesini modül düzeyinde paylaşmak yerine her alan için yeni bir
+    FieldInfo üretilir (Pydantic v2'de paylaşılan field nesneleri önerilmez).
+    """
+    return Field(default=None, ge=0, le=400)
+
+
+class BodyCompositionBase(BaseModel):
+    """Genel + segmentel vücut kompozisyonu alanları (hepsi opsiyonel)."""
+    # Genel
+    body_fat_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    total_fat_kg: Optional[float] = _body_kg()
+    lean_mass_kg: Optional[float] = _body_kg()
+    muscle_kg: Optional[float] = _body_kg()
+    bone_mass_kg: Optional[float] = _body_kg()
+    body_water_kg: Optional[float] = _body_kg()
+
+    # Segmentel yağ oranı (%)
+    right_leg_fat_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    left_leg_fat_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    right_arm_fat_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    left_arm_fat_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    trunk_fat_percent: Optional[float] = Field(default=None, ge=0, le=100)
+
+    # Segmentel kas (kg)
+    right_leg_muscle_kg: Optional[float] = _body_kg()
+    left_leg_muscle_kg: Optional[float] = _body_kg()
+    right_arm_muscle_kg: Optional[float] = _body_kg()
+    left_arm_muscle_kg: Optional[float] = _body_kg()
+    trunk_muscle_kg: Optional[float] = _body_kg()
+
+    # Segmentel yağ (kg)
+    right_leg_fat_kg: Optional[float] = _body_kg()
+    left_leg_fat_kg: Optional[float] = _body_kg()
+    right_arm_fat_kg: Optional[float] = _body_kg()
+    left_arm_fat_kg: Optional[float] = _body_kg()
+    trunk_fat_kg: Optional[float] = _body_kg()
+
+    note: Optional[str] = None
+
+
+class BodyCompositionCreate(BodyCompositionBase):
+    """Yeni ölçüm isteği. 'date' verilmezse bugün kullanılır."""
+    date: Optional[date_cls] = None
+    source: Optional[str] = "manual"
+
+
+class BodyCompositionResponse(BodyCompositionBase):
+    id: int
+    date: date
+    source: Optional[str] = "manual"
+    review: Optional[Dict[str, Any]] = None
+    created_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+
+class BodyCompositionMetric(BaseModel):
+    """Tek bir metriğin güncel değeri + Jarvis kaynaklı renk/yön bilgisi."""
+    key: str
+    label: str
+    group: str
+    group_label: str
+    unit: str
+    decimals: int
+    current: Optional[float] = None
+    previous: Optional[float] = None
+    delta: Optional[float] = None
+    delta_label: Optional[str] = None
+    direction: str = "flat"      # up | down | flat
+    tone: str = "neutral"        # positive | negative | neutral (Jarvis yorumu)
+
+
+class BodyCompositionGroup(BaseModel):
+    key: str
+    label: str
+    metrics: List[BodyCompositionMetric]
+
+
+class BodyCompositionSegment(BaseModel):
+    key: str
+    label: str
+    fat_percent: Optional[float] = None
+    muscle_kg: Optional[float] = None
+    fat_kg: Optional[float] = None
+
+
+class BodyCompositionSummary(BaseModel):
+    """Kişisel Bilgiler sayfasının tek veri kaynağı."""
+    has_data: bool
+    latest: Optional[BodyCompositionResponse] = None
+    previous: Optional[BodyCompositionResponse] = None
+    first_record_date: Optional[date] = None
+    record_count: int = 0
+    review: Optional[Dict[str, Any]] = None
+    metrics: List[BodyCompositionMetric] = []
+    groups: List[BodyCompositionGroup] = []
+    segments: List[BodyCompositionSegment] = []
+    history: List[BodyCompositionResponse] = []
+
 
 # --- HAFIZA / İÇGÖRÜ ŞEMALARI ---
 class UserMemoryCreate(BaseModel):

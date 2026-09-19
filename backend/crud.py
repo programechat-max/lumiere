@@ -3,6 +3,7 @@ from sqlalchemy import func
 import datetime
 from datetime import date, timedelta
 import models, schemas
+import body_composition
 
 # ==========================================
 # 0. PROFİL OPERASYONLARI (Kişiselleştirme)
@@ -327,6 +328,89 @@ def get_body_metrics(db: Session, days: int = 60, user_id: int = None):
     if user_id:
         query = query.filter(models.BodyMetric.user_id == user_id)
     return query.order_by(models.BodyMetric.date).all()
+
+
+def create_body_composition(db: Session, data: schemas.BodyCompositionCreate, user_id: int = None):
+    """Yeni vücut kompozisyonu ölçümü kaydeder (aynı gün için upsert).
+
+    Aynı gün ikinci kez ölçüm girilirse yeni satır açmak yerine o günün kaydı
+    güncellenir: haftalık gelişim tablosunda aynı tarih iki kez görünüp
+    karşılaştırmayı bozmasın. Yalnızca gönderilen (dolu) alanlar yazılır, böylece
+    kullanıcı sadece yağ oranını güncelleyip diğer segmentleri koruyabilir.
+    """
+    try:
+        values = body_composition.extract_metric_values(data.model_dump(exclude_unset=True))
+        target_date = data.date or date.today()
+        existing = (
+            db.query(models.BodyComposition)
+            .filter(models.BodyComposition.user_id == user_id, models.BodyComposition.date == target_date)
+            .first()
+        )
+        if existing is not None:
+            for key, value in values.items():
+                setattr(existing, key, value)
+            if data.source:
+                existing.source = data.source
+            db.commit()
+            db.refresh(existing)
+            return existing
+
+        record = models.BodyComposition(user_id=user_id, date=target_date, source=data.source or "manual", **values)
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return record
+    except Exception:
+        db.rollback()
+        raise
+
+
+def get_body_compositions(db: Session, user_id: int = None, limit: int = None, newest_first: bool = False):
+    """Kullanıcının vücut kompozisyonu geçmişi (varsayılan: eskiden yeniye)."""
+    query = db.query(models.BodyComposition)
+    if user_id:
+        query = query.filter(models.BodyComposition.user_id == user_id)
+    order = (
+        (models.BodyComposition.date.desc(), models.BodyComposition.id.desc())
+        if newest_first
+        else (models.BodyComposition.date.asc(), models.BodyComposition.id.asc())
+    )
+    query = query.order_by(*order)
+    if limit:
+        query = query.limit(limit)
+    return query.all()
+
+
+def get_latest_body_compositions(db: Session, user_id: int = None, count: int = 2):
+    """En güncel 'count' ölçümü kronolojik sırayla döndürür (son eleman en yeni)."""
+    newest = get_body_compositions(db, user_id=user_id, limit=count, newest_first=True)
+    return list(reversed(newest))
+
+
+def get_previous_body_composition(db: Session, user_id: int = None, before_date=None):
+    """Verilen tarihten ÖNCEki en güncel ölçümü döndürür (karşılaştırma bazı).
+
+    Aynı güne yapılan ikinci giriş o günün satırını güncellediği için, baz olarak
+    aynı günün kaydını almak değişimi yapay olarak 'sıfır' gösterirdi. Kullanıcı
+    bugün yaptığı düzeltmede de gerçek ilerlemeyi (önceki ölçüm gününe göre)
+    görmeli; bu yüzden baz daima daha eski bir tarihten seçilir.
+    """
+    query = db.query(models.BodyComposition)
+    if user_id:
+        query = query.filter(models.BodyComposition.user_id == user_id)
+    if before_date is not None:
+        query = query.filter(models.BodyComposition.date < before_date)
+    return query.order_by(
+        models.BodyComposition.date.desc(), models.BodyComposition.id.desc()
+    ).first()
+
+
+def save_body_composition_review(db: Session, record, review: dict):
+    """Jarvis'in fark değerlendirmesini kayda iliştirir (arayüz renk kaynağı)."""
+    record.review = review
+    db.commit()
+    db.refresh(record)
+    return record
 
 
 # ==========================================
