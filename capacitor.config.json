@@ -8,7 +8,9 @@
       "lumiere-api-ea82.onrender.com",
       "192.168.0.5",
       "192.168.0.7",
-      "localhost"
+      "192.168.0.12",
+      "localhost",
+      "*.ngrok-free.dev"
     ],
     "iosScheme": "capacitor"
   }

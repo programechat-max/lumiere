@@ -8,8 +8,10 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "ios:sync": "VITE_CAPACITOR_API_URL=http://$(ipconfig getifaddr en0):8000 npm run build && npx cap sync ios",
-    "ios:open": "npm run ios:sync && open ios/App/App.xcodeproj"
+    "ios:sync": "VITE_CAPACITOR_API_URL=http://$(ipconfig getifaddr en0):8000 npm run build && PATH=/usr/local/bin:$PATH npx cap sync ios",
+    "ios:open": "npm run ios:sync && open ios/App/App.xcodeproj",
+    "api:tunnel": "ngrok http 8000 --host-header=localhost",
+    "ios:sync:tunnel": "VITE_CAPACITOR_API_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | python3 -c \"import json,sys; print(json.load(sys.stdin)['tunnels'][0]['public_url'])\") npm run build && PATH=/usr/local/bin:$PATH npx cap sync ios"
   },
   "dependencies": {
     "@capacitor/core": "^8.5.0",
