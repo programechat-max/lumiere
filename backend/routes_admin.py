@@ -187,6 +187,49 @@ def knowledge_health(db: Session = Depends(get_db)):
     return run_health_check(db)
 
 
+@router.get("/knowledge/schema-diagnosis", dependencies=[Depends(auth.require_admin)])
+def knowledge_schema_diagnosis(db: Session = Depends(get_db)):
+    """Production şema sürüklenmesini teşhis eder: modelin beklediği kolonlar ile
+    DB'de gerçekten var olan kolonları karşılaştırır. 'Program oluşturulamadı
+    (InFailedSqlTransaction)' hatasının kök nedenini bulmak için eklendi."""
+    from sqlalchemy import inspect as _inspect, text as _text
+    from models import ExerciseLibraryItem
+
+    engine = db.get_bind()
+    insp = _inspect(engine)
+    out = {"alembic_version": None, "missing_columns": [], "extra_columns": [], "select_test": None}
+
+    # 1) Alembic hangi revision'da?
+    try:
+        row = db.execute(_text("SELECT version_num FROM alembic_version")).fetchone()
+        out["alembic_version"] = row[0] if row else None
+    except Exception as exc:
+        out["alembic_version"] = f"OKUNAMADI: {exc}"
+
+    # 2) exercise_library_items gerçek kolonları vs model kolonları
+    try:
+        db_cols = {c["name"] for c in insp.get_columns("exercise_library_items")}
+        model_cols = {c.name for c in ExerciseLibraryItem.__table__.columns}
+        out["db_columns"] = sorted(db_cols)
+        out["missing_columns"] = sorted(model_cols - db_cols)  # model bekliyor ama DB'de YOK -> sorgu patlar
+        out["extra_columns"] = sorted(db_cols - model_cols)
+    except Exception as exc:
+        out["schema_error"] = str(exc)
+
+    # 3) Selector'ın birebir yaptığı sorguyu dene - hangi kolon patlıyor gör
+    try:
+        db.query(ExerciseLibraryItem).filter(
+            ExerciseLibraryItem.pending_review.is_(False),
+            ExerciseLibraryItem.evidence_level == "expert_curated",
+        ).limit(1).all()
+        out["select_test"] = "OK"
+    except Exception as exc:
+        db.rollback()
+        out["select_test"] = f"PATLADI: {type(exc).__name__}: {exc}"
+
+    return out
+
+
 @router.get("/knowledge/exercises/review-queue", dependencies=[Depends(auth.require_admin)])
 def exercise_review_queue(limit: int = Query(100, ge=1, le=500), db: Session = Depends(get_db)):
     """Karantinadaki (pending_review) egzersizlerin onay kuyruğu."""
