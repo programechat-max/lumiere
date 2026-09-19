@@ -1,10 +1,11 @@
 import logging
 import os
 import json
+import uuid
 import datetime as dt
 from datetime import date
 
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,7 @@ import billing_service
 import genai_client
 
 import error_handlers
+import job_service
 import middleware as app_middleware
 import monitoring
 import scheduler as app_scheduler
@@ -884,6 +886,36 @@ def generate_program_ai(current_user: models.User = Depends(auth.get_current_use
     # hata HTTP 500 + detay olarak frontend'e gitsin ki kullanıcı sorunu görebilsin.
     programs = ai_core.generate_workout_program(db, user_id=current_user.id, raise_on_error=True)
     return crud.get_workout_programs(db, user_id=current_user.id) if programs else []
+
+
+def _run_workout_program_job(task_id: str, user_id: int) -> None:
+    """FastAPI BackgroundTasks icinde kosar: uzun AI program uretimini HTTP
+    isteğinden ayirir. Render free plan senkron istekleri ~100 sn'de gateway'de
+    kestigi (502) icin bu Celery'siz arka plan yolu eklenmistir (worker gerektirmez)."""
+    job_service.update_job(task_id, "started", progress_percent=10)
+    try:
+        programs = ai_core.generate_workout_program(user_id=user_id, raise_on_error=True)
+        job_service.update_job(
+            task_id, "success", progress_percent=100,
+            result={"program_count": len(programs) if programs else 0},
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("[JOB] workout program uretimi basarisiz (task_id=%s)", task_id)
+        job_service.update_job(task_id, "failure", error_message=str(exc)[:500])
+
+
+@app.post("/api/workout/program/generate/async")
+def generate_program_ai_async(background_tasks: BackgroundTasks, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db), _rl: bool = Depends(enforce_plan_rate_limit("ai_workout"))):
+    """AI program uretimini ARKA PLANDA baslatir (Celery'siz, Render free dostu).
+
+    Istek aninda task_id doner; uzun AI uretimi BackgroundTasks ile HTTP'ten
+    ayrilir. Frontend /api/v1/jobs/{task_id} ile durumu sorgular, 'success'
+    olunca /api/workout/program (veya mevcut liste ucundan) programlari ceker.
+    """
+    task_id = uuid.uuid4().hex
+    job_service.create_job(db, task_id, "generate_ai_workout_program", user_id=current_user.id)
+    background_tasks.add_task(_run_workout_program_job, task_id, current_user.id)
+    return {"task_id": task_id, "status": "pending"}
 
 
 @app.post("/api/workout/log", response_model=schemas.WorkoutLogResponse)

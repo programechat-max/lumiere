@@ -543,8 +543,34 @@ export function useLumiereStore() {
   const regenerateProgram = useCallback(async () => {
     setRegenerating(true);
     try {
-      const progs = await apiFetch('/api/workout/program/generate', { timeoutMs: 180_000, retries: 1 });
-      const list = Array.isArray(progs) ? progs : (progs as Record<string, unknown>)?.programs;
+      // KOK COZUM (502): Render free plan senkron AI istegini ~100 sn'de gateway'de
+      // kesiyordu. Program uretimini arka plana (BackgroundTasks) tasiyip durumu
+      // job endpoint'inden sorguluyoruz; boylece uzun AI uretimi HTTP'i bloklamaz.
+      const start = await apiFetch('/api/workout/program/generate/async', {
+        method: 'POST',
+        timeoutMs: 30_000,
+        retries: 1,
+      });
+      const taskId = (start as Record<string, unknown>)?.task_id as string | undefined;
+      if (!taskId) throw new Error('Program üretimi başlatılamadı.');
+
+      // Job tamamlanana dek (success/failure) kisa araliklarla durumu sorgula.
+      const deadline = Date.now() + 240_000; // AI soguk baslangic + uretim payi
+      let done = false;
+      while (Date.now() < deadline && !done) {
+        await new Promise((r) => setTimeout(r, 4000));
+        const job = await apiFetch(`/api/v1/jobs/${taskId}`, { timeoutMs: 20_000, retries: 1 }) as Record<string, unknown>;
+        const status = String(job?.status || '');
+        if (status === 'success') { done = true; break; }
+        if (status === 'failure') {
+          throw new Error(String(job?.error_message || 'Program üretilemedi.'));
+        }
+      }
+      if (!done) throw new Error('Program üretimi zaman aşımına uğradı; birazdan tekrar dene.');
+
+      // Uretim bitti - guncel program listesini cek.
+      const workout = await apiFetch('/api/workout', { timeoutMs: 30_000, retries: 1 }) as Record<string, unknown>;
+      const list = workout?.programs;
       if (Array.isArray(list)) setPrograms(list as BackendProgram[]);
     } finally {
       setRegenerating(false);

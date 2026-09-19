@@ -187,9 +187,9 @@ def knowledge_health(db: Session = Depends(get_db)):
     return run_health_check(db)
 
 
-# GECICI TESHIS: asil 500 hatasini gormek icin token'siz + tam stack trace dondurur.
-# Teshis bitince hemen admin korumasina geri alinacak.
-@router.get("/knowledge/schema-diagnosis")
+# Teshis endpoint'i: production sema suruklenmesini yakalar. ADMIN korumali -
+# sema/pipeline ic detaylarini disariya acmamak icin token'siz BIRAKMA.
+@router.get("/knowledge/schema-diagnosis", dependencies=[Depends(auth.require_admin)])
 def knowledge_schema_diagnosis(db: Session = Depends(get_db)):
     """Production şema sürüklenmesini teşhis eder: modelin beklediği kolonlar ile
     DB'de gerçekten var olan kolonları karşılaştırır. 'Program oluşturulamadı
