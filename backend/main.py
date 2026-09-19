@@ -93,6 +93,26 @@ def _on_startup():
     except Exception as _food_seed_exc:  # noqa: BLE001
         logger.warning("[STARTUP] Besin genişletmesi atlandı: %s", _food_seed_exc)
 
+    # Kanıta dayalı egzersiz çekirdeği (75 expert_curated kayıt). Bu seed startup'ta
+    # hiç çağrılmadığı için production'da selector "onaylı hareket adayı bulunamadı"
+    # diyor ve program üretimi boş havuzla kalıyordu. Idempotent: var olan kayıtlara
+    # dokunmaz, yalnızca eksik çekirdeği ekler/zenginleştirir.
+    try:
+        from database import SessionLocal
+        from knowledge.seed_knowledge import seed_evidence_exercises, seed_research, seed_evidence_topics
+
+        db = SessionLocal()
+        try:
+            _ex = seed_evidence_exercises(db)
+            _rs = seed_research(db)
+            _tp = seed_evidence_topics(db)
+            if _ex or _rs or _tp:
+                logger.info("[STARTUP] Bilgi katmani cekirdegi: +%d egzersiz, +%d arastirma, +%d kanit konusu", _ex, _rs, _tp)
+        finally:
+            db.close()
+    except Exception as _ex_seed_exc:  # noqa: BLE001
+        logger.warning("[STARTUP] Egzersiz cekirdek seed'i atlandi: %s", _ex_seed_exc)
+
 
 @app.on_event("shutdown")
 def _on_shutdown():
