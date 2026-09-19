@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ios:sync": "VITE_CAPACITOR_API_URL=http://$(ipconfig getifaddr en0):8000 npm run build && npx cap sync ios",
+    "ios:open": "npm run ios:sync && open ios/App/App.xcodeproj"
   },
   "dependencies": {
     "@capacitor/core": "^8.5.0",
