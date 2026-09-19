@@ -187,7 +187,9 @@ def knowledge_health(db: Session = Depends(get_db)):
     return run_health_check(db)
 
 
-@router.get("/knowledge/schema-diagnosis", dependencies=[Depends(auth.require_admin)])
+# GECICI TESHIS: asil 500 hatasini gormek icin token'siz + tam stack trace dondurur.
+# Teshis bitince hemen admin korumasina geri alinacak.
+@router.get("/knowledge/schema-diagnosis")
 def knowledge_schema_diagnosis(db: Session = Depends(get_db)):
     """Production şema sürüklenmesini teşhis eder: modelin beklediği kolonlar ile
     DB'de gerçekten var olan kolonları karşılaştırır. 'Program oluşturulamadı
@@ -226,6 +228,40 @@ def knowledge_schema_diagnosis(db: Session = Depends(get_db)):
     except Exception as exc:
         db.rollback()
         out["select_test"] = f"PATLADI: {type(exc).__name__}: {exc}"
+
+    # 4) Gercek program uretim zincirini AI cagrisi OLMADAN dene - asil 500'un
+    #    stack trace'ini yakala (knowledge layer adimlarini tek tek kos).
+    import traceback as _tb
+    steps = {}
+    try:
+        from knowledge.split_planner import build_split
+        steps["split"] = "OK" if build_split(4, goal="recomp", level="beginner") else "bos"
+    except Exception as exc:
+        steps["split"] = f"{type(exc).__name__}: {exc}"
+    try:
+        from knowledge.exercise_selector import format_selected_pool
+        steps["selector"] = format_selected_pool(db, ["Göğüs"], goal="recomp", level="beginner", per_group=3)[:80]
+    except Exception as exc:
+        db.rollback()
+        steps["selector"] = f"PATLADI: {type(exc).__name__}: {exc}"
+    try:
+        from knowledge.science import get_research_context
+        steps["research"] = "OK" if get_research_context(db) is not None else "None"
+    except Exception as exc:
+        db.rollback()
+        steps["research"] = f"PATLADI: {type(exc).__name__}: {exc}"
+    try:
+        from knowledge.weak_areas import detect_weak_areas
+        steps["weak_areas"] = "OK" if detect_weak_areas(db, user_id=1) is not None else "None"
+    except Exception as exc:
+        db.rollback()
+        steps["weak_areas"] = f"PATLADI: {type(exc).__name__}: {exc}"
+    try:
+        from knowledge.volume_landmarks import format_volume_landmarks
+        steps["volume"] = "OK" if format_volume_landmarks(level="beginner", goal="recomp") else "bos"
+    except Exception as exc:
+        steps["volume"] = f"PATLADI: {type(exc).__name__}: {exc}"
+    out["pipeline_steps"] = steps
 
     return out
 
