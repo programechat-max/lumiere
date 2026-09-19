@@ -50,7 +50,7 @@ def analyze_progress_video():
         "data": video_bytes,
     }
 
-    model = genai.GenerativeModel(model_name="gemini-3.1-flash-lite")
+    model = genai.GenerativeModel(model_name="gemini-3.5-flash")
     analysis_prompt = """
     Sen 'Jarvis' adında elit bir fitness asistanısın. Kullanıcının gönderdiği bu ilerleme
     videosunu izle. Kullanıcı fiziksel formunu gösteriyor ve/veya sözel olarak durumunu anlatıyor olabilir.

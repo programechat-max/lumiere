@@ -28,6 +28,10 @@ class TicketReplyRequest(BaseModel):
     status: Optional[str] = None
 
 
+class ExerciseReviewRequest(BaseModel):
+    review_note: str
+
+
 def _serialize_user(u: models.User) -> dict:
     return {
         "id": u.id, "email": u.email, "full_name": u.full_name, "role": u.role,
@@ -170,4 +174,47 @@ def system_health(db: Session = Depends(get_db)):
         "redis": _check_redis(),
         "pending_jobs": pending_jobs,
         "failed_jobs_24h": failed_jobs_24h,
+    }
+
+
+# ==========================================
+# BİLGİ KATMANI OPERASYONU (knowledge layer)
+# ==========================================
+@router.get("/knowledge/health", dependencies=[Depends(auth.require_admin)])
+def knowledge_health(db: Session = Depends(get_db)):
+    """Bilgi katmanı üretim öncesi bütünlük raporu (egzersiz/besin/hacim/kanıt)."""
+    from knowledge.health_check import run_health_check
+    return run_health_check(db)
+
+
+@router.get("/knowledge/exercises/review-queue", dependencies=[Depends(auth.require_admin)])
+def exercise_review_queue(limit: int = Query(100, ge=1, le=500), db: Session = Depends(get_db)):
+    """Karantinadaki (pending_review) egzersizlerin onay kuyruğu."""
+    from knowledge.exercise_review import list_review_queue
+    return {"items": list_review_queue(db, limit=limit)}
+
+
+@router.post("/knowledge/exercises/{exercise_id}/approve", dependencies=[Depends(auth.require_admin)])
+def approve_quarantined_exercise(
+    exercise_id: int,
+    body: ExerciseReviewRequest,
+    request: Request,
+    current_admin: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Editoryal inceleme sonrası karantinadaki egzersizi üretime açar (denetim izi ile)."""
+    from knowledge.exercise_review import approve_exercise as _approve_exercise
+    try:
+        item = _approve_exercise(db, exercise_id, current_admin.email, body.review_note)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    auth.log_audit(
+        db, "admin.approve_exercise", user_id=None, actor_user_id=current_admin.id,
+        request=request, resource=f"exercise_library_item:{exercise_id}",
+        meta={"name": item.name, "evidence_level": item.evidence_level},
+    )
+    return {
+        "id": item.id, "name": item.name, "pending_review": item.pending_review,
+        "evidence_level": item.evidence_level, "evidence_source": item.evidence_source,
+        "reviewed_by": item.reviewed_by,
     }

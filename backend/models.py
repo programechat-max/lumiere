@@ -122,6 +122,17 @@ class NutritionLog(Base):
     fats = Column(Float, default=0.0)
     calories = Column(Float, default=0.0)
 
+    # --- FAZ 7 (makro/mikro doğrulama katmanı) ---
+    # Doğrulama kaynağı: "usda" | "local_db" | "llm_estimate" | None (plan eşleşmesi)
+    verification_source = Column(String, nullable=True, index=True)
+    verified = Column(Boolean, default=False)
+    confidence = Column(String, nullable=True)          # high | medium | low (foto tahminleri)
+    # Öğünün mikro kırılımı: {"sodium_mg": x, "potassium_mg": y, "vitamin_c_mg": z, ...}
+    micros = Column(JSON, nullable=True)
+    # Makro hesaplamanın dayandığı alt kalemler: [{"name","portion_g","calories","protein",
+    # "carbs","fats","source","matched_food_id"}] -> Jarvis "şu öğün nereden geldi" şeffaflığı.
+    items_breakdown = Column(JSON, nullable=True)
+
 
 class BodyMetric(Base):
     """Kilo ve vücut ölçümü geçmişi - gelişim takibi için."""
@@ -425,5 +436,153 @@ class SupportTicketMessage(Base):
     is_admin_reply = Column(Boolean, default=False)
     message = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
     ticket = relationship("SupportTicket", back_populates="messages")
+
+
+# ==========================================
+# BİLGİ KATMANI (KNOWLEDGE LAYER)
+# USDA besin verisi, egzersiz kütüphanesi ve bilimsel araştırma notları.
+# Bu tablolar KULLANICI BAĞIMSIZ (global) kütüphanelerdir - tüm kullanıcılar
+# aynı somut veri havuzunu paylaşır; AI prompt'ları serbest metin uydurmak
+# yerine bu tablolardan seçim yapar.
+# ==========================================
+class FoodItem(Base):
+    """Doğrulanmış besin kaydı - 100g başına makrolar + mikro besinler + porsiyon.
+    Kaynak: 'usda' (USDA FoodData Central, public domain) | 'local_tr' (Türk
+    mutfağı elle kürasyon) | 'ai_added' (USDA'dan canlı çekilip tabloya yazılan
+    besin, pending_review=True ile işaretlenir).
+
+    Mikro değerler de 100g başınadır (mg veya µg, sütunda tanımlandığı gibi)."""
+    __tablename__ = "food_items"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)          # kanonik isim: "Tavuk Göğsü (ızgara)"
+    aliases = Column(String, default="")                       # virgülle ayrılmış alternatif isimler
+    category = Column(String, nullable=True, index=True)       # protein_source | grain | vegetable | fruit | dairy | fat | dish_tr | supplement | other
+    calories_per_100g = Column(Float, nullable=False, default=0.0)
+    protein_per_100g = Column(Float, nullable=False, default=0.0)
+    carbs_per_100g = Column(Float, nullable=False, default=0.0)
+    fats_per_100g = Column(Float, nullable=False, default=0.0)
+    fiber_per_100g = Column(Float, nullable=True)
+    typical_portion_g = Column(Integer, nullable=True)         # örn. 150 (porsiyon gramajı)
+    source = Column(String, default="local_tr", index=True)    # usda | local_tr | ai_added
+    usda_fdc_id = Column(Integer, nullable=True, index=True)   # USDA FoodData Central FDC ID
+    match_score = Column(Float, nullable=True, index=True)    # 0-1: isim/USDA eşleşme güveni
+    dietary_tags = Column(String, default="")                  # virgüllü: vegetarian,vegan,gluten_free,lactose_free,high_protein
+    pending_review = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    # --- MİKRO BESİNLER (100g başına) - USDA FDC nutrient numaralarıyla eşleşir ---
+    sodium_mg = Column(Float, nullable=True)          # 1093
+    potassium_mg = Column(Float, nullable=True)       # 1092
+    calcium_mg = Column(Float, nullable=True)         # 1087
+    iron_mg = Column(Float, nullable=True)            # 1089
+    magnesium_mg = Column(Float, nullable=True)       # 1090
+    zinc_mg = Column(Float, nullable=True)            # 1095
+    vitamin_d_ug = Column(Float, nullable=True)       # 1114
+    vitamin_b12_ug = Column(Float, nullable=True)     # 1178
+    vitamin_c_mg = Column(Float, nullable=True)       # 1162
+    # Günlük referans değerler (GDA) -> Jarvis mikro yorumlaması için
+    micro_reference = Column(JSON, nullable=True)     # {"sodium_mg": 2000, "potassium_mg": 3500, ...}
+
+
+class ExerciseLibraryItem(Base):
+    """Kanonik egzersiz kütüphanesi kaydı - mevcut Exercise şemasının alanlarıyla
+    birebir uyumlu (name, muscle_group, exercise_type, equipment, technique_cue,
+    stretch_mediated, unilateral). AI program üretirken hareketleri SADECE bu
+    kütüphaneden seçer; kütüphanede gerçekten yoksa pending_review=True ile
+    ekleyebilir (kaçış vanası) - sonraki üretimlerde kullanılır."""
+    __tablename__ = "exercise_library_items"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)          # kanonik isim: "Incline Dumbbell Press"
+    aliases = Column(String, default="")                       # "Eğimli Dambbell Press, Incline DB Press"
+    muscle_group = Column(String, nullable=False, index=True)  # Göğüs | Sırt | Quadriceps | Hamstring & Glute | Omuz | Biceps | Triceps | Karın
+    secondary_muscles = Column(String, default="")
+    exercise_type = Column(String, nullable=True)              # Exercise.exercise_type ile aynı enum
+    stretch_mediated = Column(Boolean, default=False)
+    unilateral = Column(Boolean, default=False)
+    equipment = Column(String, nullable=True, index=True)      # barbell | dumbbell | cable | machine | bodyweight | kettlebell | band
+    technique_cue = Column(Text, nullable=True)
+    rep_range_bias = Column(String, nullable=True)             # "6-10" | "8-12" | "10-15" | "12-20"
+    contraindications = Column(String, default="")             # sakatlık kısıtları: knee,shoulder,lower_back
+    evidence_refs = Column(String, default="")                 # "PMID:12345678,PMID:87654321"
+    selection_reason = Column(Text, nullable=True)             # hipertrofi gerekçesi
+    pending_review = Column(Boolean, default=False, index=True)
+    usage_count = Column(Integer, default=0)                   # programlarda kaç kez seçildi
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    # --- FAZ 6 (geniş veri katmanı) kolonları ---
+    difficulty = Column(String, default="intermediate", index=True)  # beginner | intermediate | advanced
+    force_type = Column(String, nullable=True)                        # push | pull | static | dynamic (split kurarken kullanılır)
+    mechanic = Column(String, nullable=True)                          # compound | isolation
+    goals = Column(String, default="")                                # hypertrophy|strength|... (hedef filtreleme)
+    tags = Column(String, default="")                                 # core_focus|knee_safe|no_axial_load|...
+    met = Column(Float, nullable=True)                                # MET değeri -> kalori hesabı
+    body_part = Column(String, nullable=True, index=True)             # parquet'ten gelen ham vücut bölgesi
+    description = Column(Text, nullable=True)                         # 1-2 cümlelik açıklama
+    image_start = Column(String, nullable=True)                       # görsel yolu (başlangıç)
+    image_peak = Column(String, nullable=True)                        # görsel yolu (tepe)
+    image_main = Column(String, nullable=True)                        # görsel yolu (ana)
+    is_bodyweight = Column(Boolean, default=False)
+    source = Column(String, default="local_tr", index=True)           # local_tr | parquet_import | usda
+
+    # --- FAZ 7 (kanıta dayalı hipertrofi katmanı) kolonları ---
+    # Kasın HANGİ bölümünü (head/region) öncelikli yüklediği - "tüm başları kapsa" kuralının motoru.
+    muscle_head = Column(String, nullable=True)         # Kodlanmış: "long_head"|"lateral_head"|"medial_head"|"upper"|"lower"|"clavicular"|"sternal"|...
+    # Literatür destekli hipertrofi uyarım puanı (0-10). Küratörlü kayıtlar için elle;
+    # parquet kayıtlarında None kalır ve exercise_selector None'ları düşük puanlar.
+    stimulus_rating = Column(Float, nullable=True)
+    # Hareket açıklığı profili: "full" | "lengthened" | "shortened" | "partial" (izole yükleme kararı)
+    rom_profile = Column(String, nullable=True)
+    # direct | indirect | mechanistic | expert_curated | unverified
+    evidence_level = Column(String, default="unverified", index=True)
+    evidence_source = Column(String, nullable=True)
+    evidence_scope = Column(String, default="unverified")  # muscle_group | general_mechanistic | direct
+    reviewed_by = Column(String, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    review_note = Column(Text, nullable=True)
+
+
+class ResearchNote(Base):
+    """Küratörlü bilimsel bulgu notu (özet + PMID/URL). Program üretiminde
+    deterministik, gecikmesiz prompt bağlamı sağlar. PubMed canlı sorgusu
+    sadece (yeniden) oluşturmada ve cache'li çalışır - hata halinde bu tablo
+    tek başına yeterlidir."""
+    __tablename__ = "research_notes"
+    id = Column(Integer, primary_key=True, index=True)
+    topic = Column(String, nullable=False, index=True)         # volume | frequency | stretch | deload | periodization | protein | recovery | prehab
+    title = Column(String, nullable=False)
+    summary = Column(Text, nullable=False)                     # 1-3 cümlelik bulgu özeti
+    finding_rule = Column(Text, nullable=True)                 # prompt'a giren uygulanabilir kural
+    evidence_refs = Column(String, default="")                 # "PMID:12345678" veya URL
+    source_type = Column(String, default="curated", index=True)  # curated | pubmed_live
+    target_muscle_group = Column(String, nullable=True, index=True)  # null = genel kural
+    relevance_score = Column(Integer, default=5)               # 1-10, prompt seçiminde kullanılır
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class EvidenceTopic(Base):
+    """Küratörlü kanıt konu bankası - Jarvis "Neden X yerine Y?" soruları için.
+
+    Kullanıcı bir hareket seçimi/biyomekanik sorusu sorduğunda önce bu tabloda
+    eşleşme aranır (question_keywords + muscle_group); eşleşme varsa direct_answer
+    + biomechanics + key_studies (PMID doğrulanmış) Jarvis prompt'una girer ve AI
+    küratörlü çekirdeğin üzerine kanıt yapısı kurar. PubMed canlı sorgu bu tabloyu
+    tamamlar, asla tek başına çalışmaz (uydurma atıf riskini sıfırlar)."""
+    __tablename__ = "evidence_topics"
+    id = Column(Integer, primary_key=True, index=True)
+    topic = Column(String, nullable=False, index=True)        # exercise_choice | biomechanics | nutrition_science | recovery_optimization
+    question_keywords = Column(String, default="", index=True)  # virgüllü eşleşme anahtar kelimeleri (TR+EN)
+    muscle_group = Column(String, nullable=True, index=True)  # Göğüs | Triceps | ... (null = genel)
+    focused_exercises = Column(String, default="")            # virgüllü: "Overhead Cable Extension,Pushdown"
+    direct_answer = Column(Text, nullable=False)              # 1-2 cümle net cevap
+    biomechanics = Column(Text, nullable=True)                # biyomekanik mekanizma açıklaması
+    exercise_recommendations = Column(JSON, nullable=True)    # [{exercise, rep_range, rir, head, why}]
+    key_studies = Column(JSON, nullable=True)                 # [{authors, year, title, pmid, journal, link}]
+    source_note = Column(Text, nullable=True)                 # sınırlar/uyarılar (insan denemesi verisi vs)
+    is_active = Column(Boolean, default=True, index=True)
+    priority = Column(Integer, default=5)                     # eşleşmede öncelik sırası
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

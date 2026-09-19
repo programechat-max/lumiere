@@ -24,10 +24,12 @@ def _env_model(name: str, default: str) -> str:
     return val or default
 
 
-MODEL_NAME = _env_model("GEMINI_MODEL", "gemini-3.1-flash-lite")
-MEDIA_MODEL_NAME = _env_model("GEMINI_MEDIA_MODEL", "gemini-3.1-flash-lite")
+MODEL_NAME = _env_model("GEMINI_MODEL", "gemini-3.5-flash")
+MEDIA_MODEL_NAME = _env_model("GEMINI_MEDIA_MODEL", "gemini-3.5-flash")
 # 503/429 (yuksek talep / kota) hatalarinda devreye giren yedek model:
-FALLBACK_MODEL_NAME = _env_model("GEMINI_FALLBACK_MODEL", "gemini-3.1-flash-lite")
+# Lite varyanti kotada daha sansli oldugu icin yedekte tutulur; birincil
+# kaliteyi dusurmez, yalnizca gecici API hatalarinda devreye girer.
+FALLBACK_MODEL_NAME = _env_model("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite")
 
 # Retry ayarlari: gecici API hatalarinda ustel beklemeyle yeniden dener
 _MAX_ATTEMPTS = 3

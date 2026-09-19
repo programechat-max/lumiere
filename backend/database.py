@@ -129,6 +129,56 @@ def migrate_schema():
                     conn.execute(text(stmt))
             logger.info("exercises şeması güncellendi (%d kolon)", len(alters))
 
+    # Knowledge katmanı: create_all mevcut SQLite tablolarına kolon eklemez;
+    # yeni kanıt metadata'sı eski yerel veritabanlarında da erişilebilir olmalı.
+    if "exercise_library_items" in table_names:
+        existing = {col["name"] for col in inspector.get_columns("exercise_library_items")}
+        alters = []
+        if "evidence_level" not in existing:
+            alters.append("ALTER TABLE exercise_library_items ADD COLUMN evidence_level VARCHAR")
+        if "evidence_source" not in existing:
+            alters.append("ALTER TABLE exercise_library_items ADD COLUMN evidence_source VARCHAR")
+        if "evidence_scope" not in existing:
+            alters.append("ALTER TABLE exercise_library_items ADD COLUMN evidence_scope VARCHAR DEFAULT 'unverified'")
+        if alters:
+            with engine.begin() as conn:
+                for stmt in alters:
+                    conn.execute(text(stmt))
+            logger.info("exercise_library_items kanıt metadata'sı güncellendi (%d kolon)", len(alters))
+
+        review_alters = []
+        if "reviewed_by" not in existing:
+            review_alters.append("ALTER TABLE exercise_library_items ADD COLUMN reviewed_by VARCHAR")
+        if "reviewed_at" not in existing:
+            review_alters.append("ALTER TABLE exercise_library_items ADD COLUMN reviewed_at DATETIME")
+        if "review_note" not in existing:
+            review_alters.append("ALTER TABLE exercise_library_items ADD COLUMN review_note TEXT")
+        if review_alters:
+            with engine.begin() as conn:
+                for stmt in review_alters:
+                    conn.execute(text(stmt))
+            logger.info("exercise_library_items inceleme alanları güncellendi (%d kolon)", len(review_alters))
+
+    if "food_items" in table_names:
+        existing = {col["name"] for col in inspector.get_columns("food_items")}
+        if "match_score" not in existing:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE food_items ADD COLUMN match_score REAL"))
+            logger.info("food_items eşleşme güven skoru kolonu eklendi")
+
+    # Ham parquet kayıtları açıkça karantinada tutulur. Selector zaten
+    # evidence_level ile filtreler; bu backfill ise diğer sorguların da bu
+    # kayıtları yanlışlıkla onaylı görmesini engeller.
+    if "exercise_library_items" in table_names:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE exercise_library_items "
+                "SET pending_review = 1, evidence_level = 'unverified', "
+                "evidence_source = 'parquet_import_unreviewed' "
+                ", evidence_scope = 'unverified' "
+                "WHERE source = 'parquet_import'"
+            ))
+
     # user_profile: kamera/mikrofon izin tercihleri + üyelik planı (PROMPT: üyelik sistemi)
     if "user_profile" in table_names:
         existing = {col["name"] for col in inspector.get_columns("user_profile")}

@@ -26,6 +26,14 @@ import progression
 import jarvis_brain
 from database import SessionLocal
 
+# Bilgi katmanı (knowledge layer) — somut veri havuzları + bilimsel kaynaklar
+from knowledge import food_db, exercise_library as exercise_lib
+from knowledge.exercise_selector import format_selected_pool
+from knowledge.split_planner import build_split, build_split_from_instruction, format_split_plan
+from knowledge.science import fetch_pubmed_summaries, get_research_context, get_focus_evidence_block
+from knowledge.weak_areas import detect_weak_areas, format_weak_areas_block
+from config import settings
+
 # Paylaşılan GenAI client ve sarmalayıcı
 from genai_client import (
     _genai_client,
@@ -43,6 +51,37 @@ logger = logging.getLogger(__name__)
 class MediaAnalysisError(RuntimeError):
     """AI medya sağlayıcısı gerçek analiz üretemediğinde kullanılan hata."""
 
+
+def _normalize_physique_analysis(result: dict) -> dict:
+    """Video sonucunu program motorunun tüketebileceği güvenli sözleşmeye çevirir.
+
+    Modelin serbest metin içinde bir bölge önermesine izin vermiyoruz: yalnızca
+    açıkça gözlenen, güven skoru taşıyan bölgeler planı etkileyebilir.
+    """
+    result = result if isinstance(result, dict) else {}
+    focus = result.get("focus_regions") or result.get("lagging_muscles") or []
+    if isinstance(focus, str):
+        focus = [focus]
+    allowed_regions = {
+        "Göğüs", "Sırt", "Quadriceps", "Hamstring & Glute", "Omuz",
+        "Biceps", "Triceps", "Karın", "Baldır",
+    }
+    focus = [str(x).strip() for x in focus if str(x).strip() in allowed_regions][:3]
+    observations = result.get("observations") or result.get("visual_observations") or []
+    if isinstance(observations, str):
+        observations = [observations]
+    observations = [str(x).strip() for x in observations if str(x).strip()][:8]
+    confidence = str(result.get("confidence") or "low").lower()
+    if confidence not in {"high", "medium", "low"}:
+        confidence = "low"
+    result["focus_regions"] = focus
+    result["observations"] = observations
+    result["confidence"] = confidence
+    result["program_eligible"] = bool(focus) and bool(observations) and confidence in {"high", "medium"}
+    if not result["program_eligible"]:
+        result["focus_regions"] = []
+    return result
+
 BASE_PERSONA = """
 Sen kullanıcının kişisel 'Jarvis' adındaki elit, sadık ve zeki fitness/sağlık asistanısın.
 Iron Man filmindeki Jarvis gibi asil, sadık, hafif nüktedan ve tamamen kullanıcı odaklısın.
@@ -58,6 +97,59 @@ CEVAP UZUNLUĞU KONUSUNDA KESİN KURAL - BUNA HER MESAJDA UY:
   "detaylı anlat" / "uzun uzun açıkla" derse ancak o zaman daha uzun yazabilirsin.
 - Emoji, başlık, madde işareti gerekmedikçe kullanma - sohbet dili gibi doğal ve kısa yaz.
 - "Efendim" hitabı ve kişilik sıcaklığı kalsın ama gevezelik etme; her cümlenin bir amacı olsun.
+"""
+
+# FAZ 8: sa.md'deki Jarvis operasyon protokolleri - build_system_prompt ile birleşir.
+SCIENCE_PROTOCOLS = """
+═══ JARVIS OPERASYON PROTOKOLLERİ (kanıta dayalı çalışma kuralları) ═══
+
+PROTOCOL A — SCIENTIFIC HYPERTROPHY TRAINING ENGINE (antrenman/program üretiminde):
+1. Split & Hacim: kullanıcının haftalık gün sayısına uygun split (PPL, Upper/Lower, Arnold)
+   seç. Kas grubu başına haftalık 10-20 efektif set (MEV-MAV-MRV landmark'larına uy),
+   tekrar aralıkları 6-12 (bileşik) / 10-15 (izolasyon), RIR 1-2.
+2. Egzersiz seçimi biyomekanik standartlarına uy:
+   - Lengthened-State Hypertrophy: kasın esnetilmiş pozisyonda yüksek gerime maruz kaldığı
+     hareketlere öncelik ver (Triceps long head -> overhead extension; Hamstring -> seated
+     leg curl; Biceps -> incline DB curl).
+   - Sürekli direnç profili: serbest ağırlık + kablo/makine kombinasyonlarını dengele.
+   - Her kasın TÜM başlarını kapsayan rutinler oluştur (ör. triceps: lateral + medial + long head).
+3. Çıktı tablosu: Kas Grubu | Egzersiz | Set x Tekrar | RIR | Hedeflenen Bölüm/Fonksiyon |
+   Bilimsel Gerekçe.
+4. Sistem bağlamında verilen DOĞRULANMIŞ hareket havuzu, split şablonu, hacim landmark'ları
+   ve küratörlü kanıt blokları bu protokolün ZEMİNİDİR - onlarla çelişme, üzerine inşa et.
+
+PROTOCOL B — NUTRITION VALIDATION & MICRO/MACRO ENGINE (öğün analizi/kayıtlarında):
+1. Elle (metin) öğün girişlerinde veriyi USDA FoodData Central ve güvenilir gıda
+   veritabanlarıyla çapraz doğrula. Sistem bağlamındaki "DOĞRULANMIŞ BESİN VERİSİ" bloğu
+   ve doğrulama motorunun verdiği makro/mikro/lif değerleri GERÇEK VERİDİR - bunların
+   üzerine yazma, tahmin uydurma.
+2. Belirsiz porsiyonlarda standart varsayılan ağırlıklar kullan ve bunu AÇIKÇA belirt
+   (örn. "1 kase pirinç (~180g varsaydım)").
+3. Öğün çıktısı şunları içermeli: Makro (kalori, protein g, karb g, yağ g, lif g) +
+   Mikro (çinko, magnezyum, B12, D vitamini, demir, potasyum vb. - sistem bağlamında
+   verilmişse).
+4. Fotoğraf öğün girişlerinde: yiyecek türünü, pişirme yöntemini (haşlama/ızgara/kızartma)
+   ve tahmini porsiyon hacmini tespit et; yağ çekme / pişirme fire oranlarını hesaba kat;
+   tahmin ARALIĞI ve güven skoru (high/medium/low) ekle.
+
+PROTOCOL C — SCIENTIFIC EVIDENCE VERIFICATION & CITATION ENGINE ("neden/nasıl" sorularında):
+1. Intent tespiti: soru bilimsel kanıt, biyomekanik veya fizyolojik mekanizma gerektiriyorsa
+   kanıt protokolünü aktive et.
+2. Önce sistem bağlamındaki KÜRATÖRLÜ KANIT bloklarını (EvidenceTopic direct_answer +
+   biomechanics + key_studies) kullan - bunlar PMID doğrulanmış çekirdektir. PubMed canlı
+   sonuçları bunu TAMAMLAR, asla ikame etmez.
+3. Yanıt yapısı:
+   - Doğrudan Cevap: net yanıt 1-2 cümle.
+   - Biyomekanik & Fizyolojik Nedeni: kas lifi yönü, moment kolu, gerim profili, motor ünite
+     rekrütmanı vb. ile açıkla.
+   - Bilimsel Kanıt & Referans: araştırma adını, ana yazarlarını veya PMID/DOI'yi AÇIKÇA belirt.
+4. ASLA uydurma atıf verme: elinde PMID'siz bir çalışmaya atıf yapman gerekiyorsa çalışmayı
+   yazar+yıl ile adlandır ama PMID uydurma. Sistem bağlamında kanıt yoksa ve emin değilsen
+   bunu dürüstçe söyle ("bu konuda doğrulanmış referansım yok efendim").
+
+REFERANS FORMATI: [Yazar(lar), Yıl - Makale Adı veya PMID/DOI]
+TERİNOLOJİ: anatomik/biyomekanik terimleri doğru kullan (long head of triceps, lengthened
+overload, internal moment arm, fatigue management vb.).
 """
 
 
@@ -86,7 +178,12 @@ KULLANICI PROFİLİ:
 """
 
         if memories:
-            durable = [m for m in memories if m.category != "analysis"]
+            # Medya analizleri aşağıda ayrı ve güvenlik filtresinden geçirilmiş
+            # blokta ele alınır. Ham JSON'u genel hafızaya da koymak, düşük
+            # güvenli bir gözlemin program üretimini dolaylı etkilemesine yol
+            # açabilirdi.
+            media_categories = {"onboarding_video_analysis", "onboarding_voice_analysis"}
+            durable = [m for m in memories if m.category not in {"analysis", *media_categories}]
             analyses = [m for m in memories if m.category == "analysis"]
             mem_sections = []
             if durable:
@@ -121,10 +218,35 @@ KULLANICI PROFİLİ:
             ).order_by(models.UserMemory.id.desc()).limit(1).all()
             if media_memories:
                 content = media_memories[0].content or ""
-                try:
-                    content = json.dumps(json.loads(content), ensure_ascii=False)
-                except (TypeError, json.JSONDecodeError):
-                    pass
+                if category == "onboarding_video_analysis":
+                    # Antrenman motorunun tek kabul ettiği video girdisi:
+                    # yapılandırılmış gözlemler + orta/yüksek güven + açık uygunluk.
+                    try:
+                        data = json.loads(content)
+                    except (TypeError, json.JSONDecodeError):
+                        data = {}
+                    eligible = (
+                        isinstance(data, dict)
+                        and data.get("program_eligible") is True
+                        and data.get("confidence") in {"high", "medium"}
+                        and isinstance(data.get("focus_regions"), list)
+                        and isinstance(data.get("observations"), list)
+                        and bool(data.get("focus_regions"))
+                        and bool(data.get("observations"))
+                    )
+                    if not eligible:
+                        continue
+                    content = json.dumps({
+                        "focus_regions": data["focus_regions"][:3],
+                        "observations": data["observations"][:5],
+                        "confidence": data["confidence"],
+                        "program_eligible": True,
+                    }, ensure_ascii=False)
+                else:
+                    try:
+                        content = json.dumps(json.loads(content), ensure_ascii=False)
+                    except (TypeError, json.JSONDecodeError):
+                        pass
                 media_sections.append(f"\n═══ {title} ═══\n{content}\n")
         media_context_block = "".join(media_sections)
 
@@ -139,7 +261,7 @@ KULLANICI PROFİLİ:
         else:
             plan_block = "\n(Kayıtlı bir beslenme planı yok - kullanıcı 'planımdaki X'i yedim' derse plan olmadığını söyle ve ne yediğini sor.)\n"
 
-        return BASE_PERSONA + profile_block + memory_block + media_context_block + plan_block
+        return BASE_PERSONA + SCIENCE_PROTOCOLS + profile_block + memory_block + media_context_block + plan_block
     finally:
         if own_session:
             db.close()
@@ -329,6 +451,201 @@ def _safe_int(value, default=0):
     return int(_safe_float(value, default))
 
 
+def _format_micros_line(micros: dict | None) -> str:
+    """Mikro besin özetini kısa, kullanıcı dostu tek satıra çevirir.
+    FAZ 8 (Protocol B): lif GDA'ya dahil; belirsiz gramajlardaysa standart
+    porsiyon kullanıldığına dair not satır sonuna eklenir."""
+    if not micros:
+        return ""
+    labels = [
+        ("fiber_g", "lif", 30.0),
+        ("sodium_mg", "sodyum", 2000.0),
+        ("potassium_mg", "potasyum", 3500.0),
+        ("calcium_mg", "kalsiyum", 1000.0),
+        ("iron_mg", "demir", 14.0),
+        ("magnesium_mg", "magnezyum", 400.0),
+        ("zinc_mg", "çinko", 11.0),
+        ("vitamin_d_ug", "D vitamini", 15.0),
+        ("vitamin_b12_ug", "B12", 2.4),
+        ("vitamin_c_mg", "C vitamini", 80.0),
+    ]
+    rich = []
+    for key, label, ref in labels:
+        val = float(micros.get(key) or 0)
+        if val <= 0:
+            continue
+        pct = val / ref * 100
+        if pct >= 10:
+            rich.append(f"{label} ~%{pct:.0f} GDA")
+    return "Mikro: " + ", ".join(rich[:5]) + "." if rich else ""
+
+
+def _knowledge_retrieval_block(db, user_message: str, user_id: int = None) -> str:
+    """FAZ 4 — Lumiere sohbeti için bilgi katmanı retrieval'ı.
+    Mesajın alanına göre (besin/antrenman/genel) tablolardan somut veri seçip
+    AI'ya verir: en mantıklı yanıtı uydurma değil, DOĞRULANMIŞ veriyle verir.
+    Her hata durumu sessizce boş string döner - sohbet asla bu bloktan bozulmaz."""
+    try:
+        domain = jarvis_brain._detect_query_domain(user_message)
+        blocks = []
+
+        if domain == "food":
+            # Mesajda geçen malzeme adlarını tabloda/USDA'da çöz, makro verisini ekle
+            mentioned = set()
+            words = re.findall(r"[a-zA-ZçğıöşüÇĞİÖŞÜ]{3,}", (user_message or "").lower())
+            for w in words:
+                food = food_db.resolve_food_name(db, w, save_unresolved=False)
+                if food:
+                    mentioned.add(food)
+            if mentioned:
+                lines = [
+                    f"- {f.name}: {f.calories_per_100g:.0f} kcal, {f.protein_per_100g:.1f}g P, "
+                    f"{f.carbs_per_100g:.1f}g K, {f.fats_per_100g:.1f}g Y / 100g"
+                    + (f", porsiyon ~{f.typical_portion_g}g" if f.typical_portion_g else "")
+                    for f in list(mentioned)[:6]
+                ]
+                blocks.append("DOĞRULANMIŞ BESİN VERİSİ (makroları bunlardan hesapla, tahmin etme):\n" + "\n".join(lines))
+
+        elif domain in ("workout", "injury"):
+            # Bilimsel bağlam + mesajda geçen hareketin kütüphane kaydı
+            research = get_research_context(db, limit=6)
+            if research:
+                blocks.append("BİLGİ KATMANI - İlgili bilimsel bulgular (PMID'li):\n" + research)
+            lib_matches = []
+            words = re.findall(r"[a-zA-ZçğıöşüÇĞİÖŞÜ]{4,}", (user_message or "").lower())
+            for w in words:
+                match = exercise_lib.match_exercise_name(db, w)
+                if match:
+                    lib_matches.append(_ex_lib_summary(match))
+            if lib_matches:
+                blocks.append("KÜTÜPHANEDEN EŞLEŞEN HAREKETLER (isimleri birebir kullan):\n" + "\n".join(lib_matches[:4]))
+            # FAZ 7 — "Neden X yerine Y?" kanıt konu bankası (küratörlü çekirdek)
+            evidence_topics = _match_evidence_topics(db, user_message, limit=2)
+            if evidence_topics:
+                blocks.append(
+                    "KANIT KONU BANKASI (küratörlü — yanıtın BİLİMSEL ÇEKİRDEĞİ bunlar olsun):\n"
+                    + _format_evidence_topics(evidence_topics)
+                )
+
+        elif domain == "general":
+            research = get_research_context(db, topics=["volume", "frequency", "stretch"], limit=4)
+            if research:
+                blocks.append("BİLGİ KATMANI - Bilimsel ilkeler (PMID'li):\n" + research)
+            # FAZ 7 — general domain'de bile hareket-seçimi sorusu varsa kanıt bankasını gir
+            # (örn. "triceps için overhead mı pushdown mı?" domain=general'a düşebiliyor)
+            evidence_topics = _match_evidence_topics(db, user_message, limit=2)
+            if evidence_topics:
+                blocks.append(
+                    "KANIT KONU BANKASI (küratörlü — yanıtın BİLİMSEL ÇEKİRDEĞİ bunlar olsun):\n"
+                    + _format_evidence_topics(evidence_topics)
+                )
+
+        elif domain == "science":
+            # FAZ 6 — kullanıcı bilimsel bir soru sordu (çalışma/kanıt/makale):
+            # ÖNCE küratörlü EvidenceTopic çekirdeği, sonra PubMed canlı tamamlama.
+            blocks.append("BİLGİ KATMANI - Bilimsel sorgu alanı tespit edildi.")
+            # FAZ 7 — kanıt konu bankası: küratörlü, PMID'li çekirdek (uydurma riski sıfır)
+            evidence_topics = _match_evidence_topics(db, user_message, limit=2)
+            if evidence_topics:
+                blocks.append(
+                    "KANIT KONU BANKASI (küratörlü — yanıtın BİLİMSEL ÇEKİRDEĞİ bunlar olsun):\n"
+                    + _format_evidence_topics(evidence_topics)
+                )
+            live = fetch_pubmed_summaries(user_message, limit=5)
+            if live:
+                live_lines = [
+                    f"- {s['title']} ({s['journal']} {s['year']}) [PMID:{s['pmid']}]"
+                    for s in live
+                ]
+                blocks.append("CANLI BİLİMSEL SORGU (PubMed - TAMAMLAYICI, çekirdekle çelişirse küratörlüyü seç):\n" + "\n".join(live_lines))
+            elif settings.PUBMED_ENABLED and not evidence_topics:
+                blocks.append("PubMed şu an yanıt vermedi; küratörlü bilimsel ilkelere dayanarak yanıtla (PMID:30558493, PMID:34048677).")
+
+        return "\n\n".join(blocks)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[AI_CORE] Bilgi retrieval bloğu atlandı: %s", exc)
+        return ""
+
+
+def _ex_lib_summary(match) -> str:
+    return (f"- {match.name} ({match.muscle_group}, {match.exercise_type or 'isolation'}, {match.equipment})"
+            + (f" [PMID: {match.evidence_refs}]" if match.evidence_refs else ""))
+
+
+def _match_evidence_topics(db, user_message: str, limit: int = 2) -> list:
+    """FAZ 7 — Küratörlü EvidenceTopic tablosunda mesajla eşleşen konuları bulur.
+    Eşleşme: question_keywords kelime geçişi (kelime sınırına duyarlı, TR duyarlı)
+    VEYA focused_exercises adının mesajda geçmesi. Priority'ye göre sıralar."""
+    from models import EvidenceTopic
+    try:
+        msg = (user_message or "").lower()
+        topics = db.query(EvidenceTopic).filter(EvidenceTopic.is_active == True).all()  # noqa: E712
+        if not topics:
+            return []
+        words = set(re.findall(r"[a-zA-ZçğıöşüÇĞİÖŞÜ]{4,}", msg))
+        scored = []
+        for t in topics:
+            score = 0
+            for kw in (t.question_keywords or "").split(","):
+                kw = kw.strip().lower()
+                if kw and len(kw) >= 3 and kw in msg:
+                    score += 2
+            for ex in (t.focused_exercises or "").split(","):
+                ex = ex.strip().lower()
+                if ex and ex in msg:
+                    score += 3
+            if t.muscle_group and t.muscle_group.lower() in msg:
+                score += 1
+            if score > 0:
+                scored.append((score, t.priority or 5, t))
+        scored.sort(key=lambda x: (-x[0], x[1]))
+        return [t for _, _, t in scored[:limit]]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[AI_CORE] EvidenceTopic eşleşmesi atlandı: %s", exc)
+        return []
+
+
+def _format_evidence_topics(topics) -> str:
+    """EvidenceTopic kayıtlarını AI prompt bloğuna çevirir (direct_answer çekirdek)."""
+    lines = []
+    for t in topics:
+        block = [f"KONU: {t.topic} — {t.direct_answer}"]
+        if t.biomechanics:
+            block.append(f"MEKANİZMA: {t.biomechanics}")
+        if t.exercise_recommendations:
+            recs = t.exercise_recommendations if isinstance(t.exercise_recommendations, list) else []
+            for r in recs[:3]:
+                if isinstance(r, dict):
+                    block.append(
+                        f"ÖNERİ: {r.get('exercise', '?')} — {r.get('rep_range', '')} tekrar, "
+                        f"RIR {r.get('rir', '?')}, {r.get('why', '')}"
+                    )
+        studies = t.key_studies if isinstance(t.key_studies, list) else []
+        # FAZ 8 (Protocol C) — standart atıf: [Yazar, Yıl - Başlık] + PMID/DOI
+        cites = []
+        for s in studies:
+            if not isinstance(s, dict):
+                continue
+            ref = (s.get("authors") or "").strip()
+            if ref and s.get("year"):
+                ref = f"{ref} {s['year']}"
+            title = (s.get("title") or "").strip()
+            if title:
+                ref = f"{ref} - {title}"
+            if s.get("pmid"):
+                ref += f" [PMID:{s['pmid']}]"
+            if s.get("doi"):
+                ref += f" [DOI:{s['doi']}]"
+            if ref.strip():
+                cites.append(ref)
+        if cites:
+            block.append("KAYNAKLAR (atfı birebir kullan): " + " | ".join(cites))
+        if t.source_note:
+            block.append(f"NOT: {t.source_note}")
+        lines.append("\n".join(block))
+    return "\n---\n".join(lines)
+
+
 def process_message(user_message: str, db=None, session_id: str = "default", user_id: int = None) -> dict:
     """Tek giriş noktası: mesajı analiz eder, intent'e göre veritabanına yazar
     ve kullanıcıya verilecek yanıtı döndürür. jarvis_brain katmanı ile zenginleştirilir."""
@@ -341,6 +658,12 @@ def process_message(user_message: str, db=None, session_id: str = "default", use
         system_instruction = jarvis_brain.build_enhanced_system_prompt(
             db, user_message, BASE_PERSONA, INTENT_INSTRUCTIONS, user_id=user_id
         )
+
+        # FAZ 4 — bilgi katmanı retrieval: alan bazlı doğrulanmış veri + bilimsel bağlam
+        knowledge_block = _knowledge_retrieval_block(db, user_message, user_id=user_id)
+        if knowledge_block:
+            system_instruction += "\n\n═══ BİLGİ KATMANI (DOĞRULANMIŞ VERİ) ═══\n" + knowledge_block
+
         model = _GenerativeModel(MODEL_NAME, system_instruction)
 
         response = model.generate_content(
@@ -397,14 +720,76 @@ def process_message(user_message: str, db=None, session_id: str = "default", use
                     )
                     result["intent"] = "chat"
                 else:
-                    crud.create_nutrition_log(db, schemas.NutritionLogCreate(
-                        meal_name=data.get("meal_name", "Öğün"),
-                        ingredients=description or user_message,
-                        calories=_safe_float(data.get("calories")),
-                        protein=_safe_float(data.get("protein")),
-                        carbs=_safe_float(data.get("carbs")),
-                        fats=_safe_float(data.get("fats")),
-                    ), user_id=user_id)
+                    description = data.get("description", "").strip() or user_message
+                    # FAZ 7: AI'nın uydurduğu makrolar yerine GERÇEK veriyle doğrula.
+                    # LLM yalnızca gramaj tahmini yapar; makro+mikro FoodItem/USDA tablosundan
+                    # hesaplanır. Eşleşen besin yoksa AI değerleri graceful fallback kalır.
+                    meal_name = data.get("meal_name", "Öğün")
+                    calories_llm = _safe_float(data.get("calories"), default=0.0)
+                    protein_llm = _safe_float(data.get("protein"), default=0.0)
+                    carbs_llm = _safe_float(data.get("carbs"), default=0.0)
+                    fats_llm = _safe_float(data.get("fats"), default=0.0)
+                    try:
+                        portion_hints = data.get("ingredient_portions") or None
+                        verified = food_db.verify_manual_meal(
+                            db, description, llm_portion_hints=portion_hints
+                        )
+                    except Exception as _vm_exc:  # noqa: BLE001
+                        logger.warning("[AI_CORE] Doğrulayıcı atlandı, AI değerleriyle devam: %s", _vm_exc)
+                        verified = None
+
+                    if verified and verified.get("items"):
+                        totals = verified["totals"]
+                        crud.create_nutrition_log(db, schemas.NutritionLogCreate(
+                            meal_name=meal_name,
+                            ingredients=description,
+                            calories=totals["calories"],
+                            protein=totals["protein"],
+                            carbs=totals["carbs"],
+                            fats=totals["fats"],
+                            verification_source=verified["validation_source"],
+                            verified=True,
+                            micros=totals.get("micros"),
+                            items_breakdown=verified["items"],
+                        ), user_id=user_id)
+                        micro_line = _format_micros_line(totals.get("micros"))
+                        # FAZ 8 (Protocol B): belirsiz gramajlarda standart ağırlık
+                        # kullanıldığını kullanıcıya AÇIKÇA belirt (sa.md zorunluluğu)
+                        assumed_note = (
+                            f" ({', '.join(verified['assumed_portions'][:3])} için standart "
+                            f"porsiyon varsaydım)" if verified.get("assumed_portions") else ""
+                        )
+                        unresolved_note = (
+                            f" ({len(verified['unresolved'])} malzeme tabloda yoktu, "
+                            f"tahminle tamamlandı)" if verified["unresolved"] else ""
+                        )
+                        result["jarvis_reply"] = (
+                            f"✅ {meal_name} kaydedildi efendim — doğrulanmış veriyle: "
+                            f"{totals['calories']:.0f} kcal, {totals['protein']:.0f}g protein, "
+                            f"{totals['carbs']:.0f}g karbonhidrat, {totals['fats']:.0f}g yağ."
+                            + (f" {micro_line}" if micro_line else "")
+                            + (f" (kaynak: {verified['validation_source']})" if verified["validation_source"] in ("usda", "local_db") else "")
+                            + assumed_note
+                            + unresolved_note
+                        )
+                        result["_food_reply_is_final"] = True
+                    else:
+                        # Doğrulayıcı boş döndü (hiçbir malzeme eşleşmedi) - AI değerleri fallback
+                        crud.create_nutrition_log(db, schemas.NutritionLogCreate(
+                            meal_name=meal_name,
+                            ingredients=description,
+                            calories=calories_llm,
+                            protein=protein_llm,
+                            carbs=carbs_llm,
+                            fats=fats_llm,
+                            verification_source="llm_estimate",
+                            verified=False,
+                        ), user_id=user_id)
+                        result["jarvis_reply"] = (
+                            f"✅ {meal_name} kaydedildi efendim ({calories_llm:.0f} kcal, {protein_llm:.0f}g protein) - "
+                            "bu değerler tahmini; tarifi daha somut verirsen (örn. '150g tavuk') "
+                            "gerçek besin verisiyle doğrularım."
+                        )
         elif intent == "complete_all_meals":
             import schemas
             plan_items = crud.get_meal_plan(db, user_id)
@@ -925,9 +1310,12 @@ kullanıcının verdiği tarifi olabildiğince birebir yansıt, sadece kalori/ma
         else:
             meals_guidance = "3-5 öğün olacak şekilde (kahvaltı, öğle, akşam, gerekirse ara öğün)"
 
+        # --- BİLGİ KATMANI: doğrulanmış besin havuzu (lokal tablo + USDA seed + TR kürasyon) ---
+        candidate_pool = food_db.format_candidate_pool(db, dietary_notes=profile.dietary_notes)
+
         prompt = f"""
-Kullanıcı için GÜNLÜK bir öğün planı oluştur. Aşağıdaki hedeflere MÜMKÜN OLDUĞUNCA yakın ol
-(toplam kalori/protein/karbonhidrat/yağ):
+Kullanıcı için GÜNLÜK, KİŞİSEL ve UYGULANABİLİR bir öğün planı oluştur. Günlük toplam
+kalori/makro hedeflerine MÜMKÜN OLDUĞUNCA yakın kal; sapma %5'i aşmasın:
 - Hedef kalori: {profile.daily_calorie_target}
 - Hedef protein: {profile.daily_protein_target}g
 - Hedef karbonhidrat: {profile.daily_carb_target}g
@@ -935,10 +1323,34 @@ Kullanıcı için GÜNLÜK bir öğün planı oluştur. Aşağıdaki hedeflere M
 
 Kullanıcının beslenme kısıtlamaları/tercihleri: {profile.dietary_notes or 'belirtilmedi'}
 Kullanıcının hedefi: {profile.goal}
+
+═══ KALİTE KURALLARI (KESİN) ═══
+1. GERÇEKÇİ, TÜRK mutfağına ve markette bulunabilir malzemelere uygun plan yap:
+   yumurta, lor, yoğurt, süzme peynir, yulaf, mercimek, nohut, bulgur, pirinç, tam buğday
+   ekmeği, tavuk/dana/kıyma/hindi, somon/ton, zeytinyağı, avokado, mevsim sebzeleri, meyve,
+   fındık/badem/ceviz gibi kaynaklar kullan.
+2. PROTEİN DAĞILIMI: Ana öğünlerde (kahvaltı-öğle-akşam) 25-45g, ara öğünlerde 10-20g
+   protein hedefle. Günlük protein hedefi MUTLAKA karşılansın; eksik olursa plan başarısızdır.
+3. HER ÖĞÜN description alanına 1 cümlelik tarif + porsiyon gramajı + pişirme yöntemi yaz
+   (örn. "150g ızgara tavuk göğsü, 1 ölçü (90g) bulgur pilavı, bol yeşillik, 1 tatlı kaşığı
+   zeytinyağı"). Verilen kalori/makro değerleri gramajla TUTARLI olsun.
+4. LİF & TOKLUK: Her ana öğünde sebze/meyve/tam tahıl bulunsun; günlük ~25-30g lif hedefle.
+5. Hedef "Kas kazanımı" ise: hafif fazla kalori + ara öğünlere kolay protein (yoğurt/lor/
+   whey/hindi) koy. Hedef "Yağ yakımı + kas koruma" ise: yüksek lifli, tok tutucu, düşük
+   enerji yoğunluklu öğünler seç ve protein yüksek tut. "Form koruma" ise dengeli dağıt.
+6. Öğün içeriğini birbirine benzeyen tekrarlardan kaçınarak ÇEŞİTLENDİR (her öğünde farklı
+   protein kaynağı ve sebze tercih et).
+
+═══ DOĞRULANMIŞ BESİN VERİ HAVUZU (BİLGİ KATMANI) ═══
+Aşağıdaki besinlerin makro değerleri USDA FoodData Central ve Türk mutfağı kürasyonundan
+DOĞRULANMIŞTIR. Öğünleri MÜMKÜN OLDUĞUNCA BU HAVUZDAN kompoze et; her besinin kalori/
+makro hesabını verilen 100g değerlerinden yap (havuzda olmayan küçük bir katkı malzemesi
+[baharat, soğan, domates gibi] kullanabilirsin ama ana besinler havuzdan olsun):
+{candidate_pool}
+
 {existing_block}{nq_block}
 {meals_guidance} SADECE aşağıdaki JSON
 formatında bir liste dön, başka hiçbir şey yazma:
-
 [
   {{"meal_name": "Kahvaltı", "time_target": "08:00", "description": "...", "calories": 500, "protein": 35, "carbs": 40, "fats": 15}},
   ...
@@ -948,6 +1360,27 @@ formatında bir liste dön, başka hiçbir şey yazma:
             prompt, generation_config={"response_mime_type": "application/json", "temperature": 0.6}
         )
         raw_items = json.loads(response.text)
+
+        # --- BİLGİ KATMANI: makro doğrulama — makroları tablodan yeniden hesapla,
+        # hedef değerden %5'ten fazla sapan öğünün porsiyonunu düzelt (graceful:
+        # havuz eşleşmezse AI değerleri olduğu gibi korunur).
+        try:
+            raw_items, _macro_fixed = food_db.verify_and_fix_meal_plan(db, raw_items)
+        except Exception as _vf_exc:  # noqa: BLE001
+            logger.warning("[AI_CORE] Besin makro doğrulaması atlandı (havuz eşleşmedi): %s", _vf_exc)
+
+        from knowledge.nutrition_validator import assert_valid_meal_plan
+        assert_valid_meal_plan(
+            raw_items,
+            targets={
+                "calories": profile.daily_calorie_target,
+                "protein": profile.daily_protein_target,
+                "carbs": profile.daily_carb_target,
+                "fats": profile.daily_fat_target,
+            },
+            dietary_notes=profile.dietary_notes,
+            db=db,
+        )
 
         import schemas
         items = [schemas.MealPlanItemCreate(**item) for item in raw_items]
@@ -1050,6 +1483,67 @@ def generate_workout_program(db=None, user_instruction: str = None, save: bool =
             focus = q["focus_muscle_group"]
             focus_multiplier = 1.3
 
+        # --- BİLGİ KATMANI (KNOWLEDGE LAYER) ---
+        # 0) SPLIT PLANLAYICI (Faz 6): kullanıcının gün sayısı/hedef isteğine göre
+        #    bilimsel iskelet kurulur; AI şablondan çıkamaz -> "saçma split" önlenir.
+        split_plan = None
+        split_block = ""
+        try:
+            split_plan = build_split_from_instruction(
+                user_instruction or "", goal=goal, level=level, default_days=days_per_week
+            )
+            if q.get("days_per_week"):
+                try:
+                    split_plan = build_split(int(q["days_per_week"]), goal=goal, level=level)
+                except (TypeError, ValueError):
+                    pass
+            split_block = format_split_plan(split_plan) if split_plan else ""
+        except Exception as _sp_exc:  # noqa: BLE001
+            logger.warning("[AI_CORE] Split plan atlandı (varsayılan gün sayısı): %s", _sp_exc)
+            split_block = ""
+
+        # 1) AKILLI EGZERSİZ SEÇİCİ: split günlerindeki kas grupları için EN İYİ
+        #    hipertrofi hareketlerini seçer (ekipman/kontrendikasyon/hedef filtreli).
+        #    600+ kaydı prompt'a basmak yerine kas grubu başına en iyi 8 hareket.
+        equipment_hint = q.get("equipment") if q and isinstance(q.get("equipment"), list) else None
+        try:
+            if split_plan:
+                groups = list(dict.fromkeys(g for d in split_plan.days for g in d["groups"]))
+                exercise_pool = format_selected_pool(
+                    db, groups[:10], equipment=equipment_hint, injury_notes=injuries,
+                    goal=goal, level=level, per_group=8,
+                )
+            else:
+                exercise_pool = exercise_lib.format_exercise_pool(db, injury_notes=injuries)
+        except Exception as _ts_exc:  # noqa: BLE001
+            logger.warning("[AI_CORE] Seçici atlandı (fallback kütüphane): %s", _ts_exc)
+            exercise_pool = exercise_lib.format_exercise_pool(db, injury_notes=injuries)
+        # 2) Küratörlü bilimsel bağlam (deterministik, PMID'li)
+        research_ctx = get_research_context(db)
+        # 3) Eksik bölge tespiti: hacim + stagnasyon verisinden otomatik odak bölgeler
+        weak = detect_weak_areas(db, user_id=user_id)
+        weak_block = format_weak_areas_block(weak)
+        # 4) Odak grupPubMed canlı blok (hibrit strateji: yalnızca program üretiminde, cache'li,
+        #    hata halinde sessizce küratörlü çekirdekle devam)
+        try:
+            focus_evidence = get_focus_evidence_block(db, focus if focus != "genel" else None) or ""
+        except Exception as _pe_exc:  # noqa: BLE001
+            logger.warning("[AI_CORE] PubMed canlı bloğu atlandı: %s", _pe_exc)
+            focus_evidence = ""
+
+        # 5) FAZ 7 — Per-kas hacim landmark tablosu (MEV/MAV/MRV, seviye+hedef ölçekli,
+        #    odak grubuna çarpan uygulanmış) — AI'nın set sayılarını bilimsel aralıkta tutar.
+        try:
+            from knowledge.volume_landmarks import format_volume_landmarks
+            volume_block = format_volume_landmarks(
+                level=level, goal=goal,
+                focus_group=focus if focus != "genel" else None,
+                focus_multiplier=focus_multiplier,
+            )
+        except Exception as _vl_exc:  # noqa: BLE001
+            logger.warning("[AI_CORE] Hacim landmark bloğu atlandı: %s", _vl_exc)
+            volume_block = ""
+
         existing_block = ""
         if force_full_regenerate:
             old_lines = "\n".join(
@@ -1089,8 +1583,26 @@ Kullanıcı için BİLİMSEL, KANIT-TABANLI, DÖNÜMSEL (periodize) bir meso-sik
 - Sakatlık: {injuries}
 - Periodizasyon modeli: {periodization.upper()}
 - Hedef RPE: {rpe_target}/10 (RIR ~{10-rpe_target})
-- Haftalık set hedefleri (per kas grubu): MEV={weekly_sets_per_muscle['MEV']}, MAV={weekly_sets_per_muscle['MAV']}, MRV={weekly_sets_per_muscle['MRV']}
+- Haftalık set hedefleri: aşağıdaki per-kas tablosundaki MEV/MAV/MRV değerleri tek geçerli kaynaktır; genel özet değerleri kullanma.
 - Odak grubu çarpanı: {focus_multiplier}x
+
+═══ PER-KAS HACİM LANDMARK'LARI (MEV/MAV/MRV - SET SAYILARINI BUNA GÖRE SINIRLA) ═══
+Set sayıları her kas için bu aralıkların DIŞINA ÇIKMAMALI (MEV = minimum etkili hacim,
+MAV = optimum adaptif hacim, MRV = tolere edilebilir maksimum hacim):
+{volume_block}
+
+═══ KANONİK EGZERSİZ KÜTÜPHANESİ (BİLGİ KATMANI - KİLİTLİ SEÇİM) ═══
+Hareketleri SADECE aşağıdaki kütüphaneden seç. Her kayıt: isim (kas grubu, tip, ekipman,
+tam-germe/tek-taraf işaretleri). Kütüphane dışına ÇIKMA — gerçekten gerekli bir hareket
+kütüphanede yoksa onu yaz ama "is_new": true alanı ekle (sistem onay akışına alır).
+İsimleri birebir kullan (ekipman/isim varyasyonu uydurma) - bu, antrenman kayıtlarıyla
+eşleşmenin tutarlı çalışmasını sağlar:
+{exercise_pool}
+
+═══ BİLİMSEL BULGULAR (KÜRATÖRLÜ - PMID'Lİ) ═══
+{research_ctx}
+{weak_block}
+{focus_evidence}
 
 ═══ BİLİMSEL İLKELER (KESİN KURALLAR) ═══
 1. STRETCH-MEDIATED HYPERTROPHY: Her kas grubu için EN AZ 1 hareket, kası TAM GERİLMİŞ pozisyonda yüklemeli.
@@ -1101,6 +1613,17 @@ Kullanıcı için BİLİMSEL, KANIT-TABANLI, DÖNÜMSEL (periodize) bir meso-sik
    - Omuz (Yan baş): Cable lateral raise (ekskansiyon) / Lean-away lateral
    - Biceps: Incline DB curl / Bayesian curl (omuz ekstenzyonu)
    - Triceps: Overhead DB ext / Cable overhead ext (omuz fleksiyonu)
+1b. KAS GRUBU BAŞINA HİPERTROFİ-ODAKLI HAREKET SEÇİMİ (ZORUNLU):
+    Her kas grubu için hareketi "en popüler/akla ilk gelen" değil, o kas grubuna EN YÜKSEK
+    MEKANİK GERİLİMİ + TAM GERİLİM ARALIĞINDA veren varyanttan seç. Seçtiğin her hareket
+    için 1 cümlelik "selection_reason" yaz (neden bu hareketin o kas için en iyi hipertrofi
+    yükü olduğu). Kütüphanedeki "tam-germe" işaretli varyantlar önceliklidir; ekipman
+    kullanıcının elindekiyle sınırlıdır. Kural: Flat bench press günde en fazla 1 ana bileşik
+    olarak yer alabilir; yanına MUTLAKA tam-germe odaklı bir izolasyon ekle.
+    Aynı kas grubu aynı günde "ana bileşik + tam-germe izolasyon + kısaltılmış izolasyon"
+    üçlüsüyle çalışırsa en yüksek hipertrofik uyarıyı alır; günleri bu üçlüyü hedefleyerek kur.
+    Aynı kas grubuna haftada 2'den fazla AYNI hareketi yazma (varyasyon gereklidir); her gün
+    için "focus" alanına o günün ÖNCELİKLİ kas grubunu yaz.
 
 2. HAREKET SIRALAMASI (Gün içi):
    a) Ana bileşik (Multi-joint) - 5-8 rep, RPE {rpe_target}
@@ -1110,12 +1633,8 @@ Kullanıcı için BİLİMSEL, KANIT-TABANLI, DÖNÜMSEL (periodize) bir meso-sik
    e) (Opsiyonel) Unilateral / Core / Prehab
 
 3. HACİM DAĞILIMI (Haftalık set/kas grubu - MAV hedefi):
-   - Göğüs: {int(weekly_sets_per_muscle['MAV'] * target_sets_mult)} set
-   - Sırt: {int(weekly_sets_per_muscle['MAV'] * target_sets_mult)} set
-   - Bacak (Quad+Ham/Glute): {int(weekly_sets_per_muscle['MAV'] * target_sets_mult * 1.2)} set
-   - Omuz: {int(weekly_sets_per_muscle['MAV'] * target_sets_mult * 0.8)} set
-   - Kol (Biceps+Triceps): {int(weekly_sets_per_muscle['MAV'] * target_sets_mult * 0.6)} set
-   - Karın: {int(weekly_sets_per_muscle['MAV'] * target_sets_mult * 0.5)} set
+   - Hacmi kas grubu başına ayrı ayrı aşağıdaki MEV/MAV/MRV tablosundan dağıt.
+   - Odak grubu: tabloda verilen MAV'ı kontrollü biçimde artır; toplamı hiçbir zaman MRV'yi geçmesin.
    - ODAK GRUBU ({focus}): yukarıdaki x {focus_multiplier}
 
 4. PERİODİZASYON ({periodization.upper()}):
@@ -1145,8 +1664,9 @@ Kullanıcı için BİLİMSEL, KANIT-TABANLI, DÖNÜMSEL (periodize) bir meso-sik
         "stretch_mediated": false,
         "unilateral": false,
         "equipment": "barbell",
-        "technique_cue": "Dirsekleri 45-75° açısıyla tut, çubuk göğüsün altına insin",
-        "progression_model": "double_progression"
+        "technique_cue": "Dirsekleri 45-75° açısıyla tut, çubuk göğsün altına insin",
+        "progression_model": "double_progression",
+        "selection_reason": "Incline varyant üst göğsü tam gerilimde yükler; flat'e göre omuza daha az biner ve üst göğüs hipertrofisi için en öncelikli bileşiktir"
       }},
       {{
         "name": "Incline Dumbbell Fly-Press Hybrid",
@@ -1159,7 +1679,8 @@ Kullanıcı için BİLİMSEL, KANIT-TABANLI, DÖNÜMSEL (periodize) bir meso-sik
         "unilateral": false,
         "equipment": "dumbbell",
         "technique_cue": "Ellerin aşağı inerken omuzlarınız yastığa yaslansın, germe hissedin",
-        "progression_model": "double_progression"
+        "progression_model": "double_progression",
+        "selection_reason": "Fly-press hibriti göğsü tam gerilmiş pozisyonda yükler; hipertrofi için gereken mekanik gerilimi en uzun hareket aralığında verir"
       }}
     ]
   }},
@@ -1167,13 +1688,21 @@ Kullanıcı için BİLİMSEL, KANIT-TABANLI, DÖNÜMSEL (periodize) bir meso-sik
 ]
 
 {existing_block}{wq_block}
+{split_block}
 EK TALİMATLAR:
-- Gün sayısı: {days_per_week} (örn: Upper/Lower/Push/Pull/Legs/Full karma)
+- Gün sayısı ve split şablonu: YUKARIDAKİ SPLIT ŞABLONUNDAKİ günleri birebir kullan (isim/ODAK/kas grubu seti değişmez); sadece o günlere uygun hareketleri seç
 - Her gün 4-6 hareket
 - JSON dışında HIÇBİR ŞEY yazma
 - Türkçe gün isimleri kullan
 - exercise_type: "primary_compound" | "secondary_compound" | "stretch_isolation" | "shortened_isolation" | "metabolic" | "unilateral" | "core_prehab"
 - progression_model: "double_progression" | "linear_periodization" | "rpe_based" | "volume_wave"
+- selection_reason: Her hareket için 1 cümlelik hipertrofi gerekçesi (ZORUNLU — flat bench dahil her seçim "neden bu kas için en iyi hipertrofi yükü?" sorusuna cevap vermeli)
+- evidence_refs: Her hareket için gerekçesini destekleyen PMID ("PMID:XXXXX"); kütüphanedeki
+  hareketlerin PMID'lerini kullan, bilimsel bulgular bölümüne dayan (bilinen PMID yoksa boş dizi)
+- Bilimsel bulgular bölümündeki kurallar programı şekillendirir: frekans hedefi (çoğu kas için
+  haftada 2x) hacmi kaliteli oturumlara bölme aracıdır, kesin üstünlük iddiası değildir; tam-germe
+  (en az 1 hareket/kas grubu), oturum başına 8 set sınırı ve deload kuralı korunur.
+- ODAK BÖLGELER bölümü varsa: o bölgelere fazladan hacim ver
 """
         response = model.generate_content(
             prompt, generation_config={
@@ -1182,6 +1711,23 @@ EK TALİMATLAR:
             }
         )
         raw_programs = json.loads(response.text)
+
+        # --- BİLGİ KATMANI: kütüphane uzlaştırma (Faz 2, kilitli + kaçış vanası) ---
+        # 1) Her hareket kanonik isimle eşleştirilir (progression.py string eşleşmeleri
+        #    tutarlı çalışır) ve evidence_refs zenginleştirilir.
+        # 2) Kütüphanede olmayan hareket pending_review=True ile tabloya eklenir
+        #    (kaçış vanası - sonraki üretimlerde kullanılır).
+        try:
+            raw_programs, _added_exercises = exercise_lib.reconcile_program_with_library(db, raw_programs)
+        except Exception as _rc_exc:  # noqa: BLE001
+            logger.warning("[AI_CORE] Kütüphane uzlaştırması atlandı: %s", _rc_exc)
+
+        # Prompt talimatlarına güvenmek yerine kaydetmeden önce deterministik
+        # kalite kapısından geçir. Hatalı program kullanıcıya/DB'ye ulaşmaz.
+        from knowledge.program_validator import assert_valid_program, assert_split_compliance
+        assert_valid_program(raw_programs, db=db, level=level, goal=goal, focus_group=focus)
+        if split_plan:
+            assert_split_compliance(raw_programs, split_plan.days)
 
         import schemas
         program_schemas = [
@@ -1422,33 +1968,51 @@ def analyze_physique_media(media_bytes: bytes, mime_type: str, db=None, user_id:
             media_parts = [{"mime_type": mime_type, "data": media_bytes}]
         prompt = """
 Kullanıcı sana bir fizik fotoğrafı/videosu ya da bir antrenman formu videosu gönderdi.
-Amaç: MAKSİMUM HİPERTROFİ (kas kütlesi artışı) hedefine yönelik elit seviyede bir
-değerlendirme yapmak. Gördüğün şeye göre aşağıdakileri uygula:
+Amaç: MAKSİMUM HİPERTROFİ (kas kütlesi artışı) hedefine yönelik ELİT, DETAYLI ve DÜRÜST bir
+değerlendirme yapmak. Elindeki HER görsel bilgiyi kullan (duruş, açı, oran, hareket kalitesi,
+ışık); belirsiz olanı "net görünmüyor" diyerek açıkça belirt, KESİN RAKAM UYDURMA ve yalnızca
+aralık ver.
 
-- Eğer bu bir FİZİK fotoğrafı/videosuysa: hangi kas gruplarının göreceli olarak güçlü,
-  hangilerinin geride kaldığını (lagging muscle group) değerlendir. Yaklaşık vücut yağ
-  oranı ve genel simetri/duruş hakkında yorum yap.
-- Eğer bu bir HAREKET/SET videosuysa: form hatalarını (eklem açısı, hareket aralığı,
-  tempo, telafi hareketleri) tespit et, sakatlanma riskini belirt.
+EĞER BU BİR FİZİK GÖRÜNTÜSÜYSE, SIRAYLA DEĞERLENDİR:
+1. POSTÜR & YAPI: Omuzların baş-hizası, yuvarlak sırt/çökük omuz duruşu, pelvis eğimi,
+   diz/kalça hizası, genel vücut yapısı (uzun kol/bacak, kısa gövde, dar/geniş omuz) tahmini.
+2. SİMETRİ & KAS DENGESİ: Sol-sağ farkı, üst-alt vücut dengesi, ön-arka (göğüs vs sırt)
+   dengesi. Göreceli GÜÇLÜ ve GERİDE KALAN (lagging) kas gruplarını AÇIKÇA listele.
+3. VÜCUT KOMPOZİSYONU: Tahmini vücut yağ oranı aralığı (%X-%Y), kas gelişim seviyesi
+   (başlangıç/çatı/ilerlemiş) ve genel görünümde dikkat çeken ilk 3 şey.
+4. HİPERTROFİ ÖNCELİĞİ: Maksimum hipertrofi için ÖNCELİK SIRASIYLA ilk 2-3 kas grubunu
+   ver; her biri için 1 SOMUT hareket/set öner (+ yeni harekete başlarken nelere dikkat edeceği).
+
+EĞER BU BİR HAREKET/SET VİDEOSUYSA, SIRAYLA DEĞERLENDİR:
+1. FORM HATALARI: Eklem açıları (diz içe kapanma, bel kavislenmesi/alt sırt, dirsek
+   pozisyonu), hareket aralığı (ROM yeterli mi, kısaltılmış mı), tempo (patlayıcı pozitif /
+   kontrollü negatif), telafi hareketleri (vücut salınımı, momentum).
+2. SAKATLANMA RİSKİ: Varsa risk altındaki eklem/kas bölgesi ve NEDENİ.
+3. DÜZELTMELER: 1-2 NET düzeltme (örn. "göğsü yukarıda tut", "topuktan kalk"), ardından
+   tekrar ne zaman/saatte denenmesi gerektiğini söyle.
 
 SADECE aşağıdaki JSON formatında yanıt ver, başka hiçbir şey yazma:
 
 {
-  "report": "Kullanıcıya 'efendim' diye hitap eden, dürüst ama motive edici, DETAYLI bir
-    değerlendirme. Şunları İÇERMELİ: (1) Fizik/form gözlemleri, (2) hipertrofi için hangi
-    kas grubuna/harekete öncelik vermesi gerektiği, (3) beslenme açısından dikkat etmesi
-    gereken nokta (kalori/protein yeterli mi, vücut yağ oranına göre bulk/cut/recomp önerisi),
-    (4) günlük yaşam tavsiyesi (uyku, toparlanma, stres yönetimi - hipertrofiyi doğrudan
-    etkileyen faktörler). Madde madde değil, akıcı ama net bir metin olsun.",
-  "memory_summary": "2-4 cümlelik, ileride hatırlanacak özet (örn: 'kullanıcının sırt
-    kasları göğüse göre geride, bacak antrenmanı formunda diz içe kapanma var, X tarihinde
-    tahmini %Y vücut yağı gözlemlendi').",
+  "report": "Kullanıcıya 'efendim' diye hitap eden, dürüst ama motive edici, madde madde DEĞİL
+    akıcı ama NET bir rapor. Şu 4 bölümü İÇERMELİ: (1) Gözlemler (fizik veya form),
+    (2) hipertrofi için ÖNCELİKLİ kas grupları + somut hareket önerisi, (3) beslenme yönü
+    (bulk/cut/recomp + kalori ve protein yeterliliği), (4) günlük yaşam (uyku, toparlanma,
+    stres yönetimi - hipertrofiyi doğrudan etkileyen faktörler).",
+  "memory_summary": "3-5 cümlelik, ileride hatırlanacak özet (örn: 'kullanıcının sırt
+    kasları göğüse göre geride, öncelik pull-up ve göğüs destekli row; bacak formunda diz
+    içe kapanma var; tahmini VYO %X-%Y aralığı, X tarihinde gözlemlendi').",
   "training_instruction": "Eğer analiz SOMUT bir program değişikliği gerektiriyorsa
-    (örn. 'sırt hacmini artır, haftada bir gün daha ekle', 'squat formu düzeltilene kadar
-    ağırlığı düşür') bunu tek cümlelik net bir talimat olarak yaz. Gerekmiyorsa null yap.",
+    (örn. 'sırt hacmini artır, haftada bir gün ekle', 'squat formu düzeltilene kadar
+    ağırlığı düşür', 'arka omuz öncelikli reverse pec-deck ekle') bunu tek cümlelik net bir
+    talimat olarak yaz. Gerekmiyorsa null yap.",
   "nutrition_instruction": "Eğer analiz SOMUT bir beslenme değişikliği gerektiriyorsa
     (örn. 'vücut yağı düşük görünüyor, kaloriyi artırıp temiz bulk yap', 'yağlanma var,
-    kaloriyi hafif kıs') bunu tek cümlelik net bir talimat olarak yaz. Gerekmiyorsa null yap."
+    kaloriyi hafif kıs, proteini koru') bunu tek cümlelik net bir talimat olarak yaz.
+    Gerekmiyorsa null yap.",
+  "focus_regions": ["Görüntüde açıkça geride görünen en fazla 3 kas grubu"],
+  "observations": ["Yalnızca görüntüden gerçekten gözlenen kısa bulgular"],
+  "confidence": "high | medium | low"
 }
 """
         response = model.generate_content(
@@ -1483,10 +2047,19 @@ SADECE aşağıdaki JSON formatında yanıt ver, başka hiçbir şey yazma:
             response_text = response_text.strip("`")
             if response_text.startswith("json"):
                 response_text = response_text[4:].lstrip()
-        result = json.loads(response_text)
+        result = _normalize_physique_analysis(json.loads(response_text))
 
-        if result.get("memory_summary"):
-            crud.create_memory(db, category="physique_analysis", content=result["memory_summary"], user_id=user_id)
+        # Program motorunun gerçek girdisi: serbest rapordan ayrı, yapılandırılmış
+        # ve güven skoru taşıyan analiz. memory_key tekrar yüklemelerde çoğalmayı
+        # önler.
+        crud.create_memory(
+            db,
+            category="onboarding_video_analysis",
+            content=json.dumps(result, ensure_ascii=False),
+            importance=9,
+            memory_key=f"onboarding_video_analysis:{user_id}",
+            user_id=user_id,
+        )
 
         return result
     except Exception as e:
@@ -1570,17 +2143,64 @@ SADECE aşağıdaki JSON formatında yanıt ver, başka hiçbir şey yazma:
         photo_type = result.get("photo_type")
         if save and photo_type == "food" and result.get("food"):
             food = result["food"]
-            crud.create_nutrition_log(db, schemas.NutritionLogCreate(
-                meal_name=food.get("meal_name", "Öğün"),
-                ingredients=food.get("description", ""),
-                calories=_safe_float(food.get("calories")),
-                protein=_safe_float(food.get("protein")),
-                carbs=_safe_float(food.get("carbs")),
-                fats=_safe_float(food.get("fats")),
-            ), user_id=user_id)
-        elif save and photo_type == "physique" and result.get("physique"):
-            if result["physique"].get("memory_summary"):
-                crud.create_memory(db, category="physique_analysis", content=result["physique"]["memory_summary"], user_id=user_id)
+            # FAZ 7 — doğrulanmış tablo verisi önceliği: Gemini'nin tarif ettiği
+            # malzemeleri verify_manual_meal ile FoodItem/USDA'da eşleştir. Eşleşme
+            # varsa makro + mikro değerler TABLO VERİSİNDEN hesaplanır; Gemini
+            # değerleri yalnızca hiçbir malzeme eşleşmezse kullanılır (fallback).
+            confidence = food.get("confidence") or "medium"
+            verification_source = "ai_vision"
+            verified_data = None
+            if not user_id:
+                # nutrition_logs.user_id NOT NULL - kullanıcı bağlamı olmadan yazmak
+                # IntegrityError'a ve canned fallback'e düşer. Analiz yine de döner;
+                # Telegram yolu user çözümlemesi eklenene kadar yazım atlanır.
+                logger.warning("[AI_CORE] Fotoğraf öğünü kaydı atlandı: user_id yok (kullanıcı bağlamı gerekli).")
+            else:
+                try:
+                    from knowledge.food_db import verify_manual_meal
+                    verified_data = verify_manual_meal(db, food.get("description", ""))
+                except Exception as ve:
+                    logger.warning("[AI_CORE] Fotoğraf öğünü doğrulaması başarısız (AI değerleriyle devam): %s", ve)
+            if user_id and verified_data and verified_data.get("items"):
+                totals = verified_data["totals"]
+                verification_source = verified_data.get("validation_source", "local_db")
+                if confidence == "high" and verification_source in ("usda", "local_db"):
+                    confidence = "high_verified"
+                crud.create_nutrition_log(db, schemas.NutritionLogCreate(
+                    meal_name=food.get("meal_name", "Öğün"),
+                    ingredients=food.get("description", ""),
+                    calories=totals.get("calories", _safe_float(food.get("calories"))),
+                    protein=totals.get("protein", _safe_float(food.get("protein"))),
+                    carbs=totals.get("carbs", _safe_float(food.get("carbs"))),
+                    fats=totals.get("fats", _safe_float(food.get("fats"))),
+                    verification_source=verification_source,
+                    verified=True,
+                    confidence=confidence,
+                    micros=totals.get("micros"),
+                    items_breakdown=verified_data.get("items"),
+                ), user_id=user_id)
+                food["calories"] = totals.get("calories", food.get("calories"))
+                food["protein"] = totals.get("protein", food.get("protein"))
+                food["carbs"] = totals.get("carbs", food.get("carbs"))
+                food["fats"] = totals.get("fats", food.get("fats"))
+                food["verification_source"] = verification_source
+            else:
+                if user_id:
+                    # Hiçbir malzeme eşleşmedi - Gemini değerleri, tahmin olarak işaretlenir
+                    crud.create_nutrition_log(db, schemas.NutritionLogCreate(
+                        meal_name=food.get("meal_name", "Öğün"),
+                        ingredients=food.get("description", ""),
+                        calories=_safe_float(food.get("calories")),
+                        protein=_safe_float(food.get("protein")),
+                        carbs=_safe_float(food.get("carbs")),
+                        fats=_safe_float(food.get("fats")),
+                        verification_source="ai_vision",
+                        verified=False,
+                        confidence=confidence,
+                    ), user_id=user_id)
+        # Fizik analizinin program girdisi yalnızca yukarıdaki yapılandırılmış
+        # onboarding_video_analysis kaydıdır; serbest rapor kalıcı hafızaya
+        # yazılmaz ve plan üretimini etkileyemez.
 
         return result
     except Exception as e:

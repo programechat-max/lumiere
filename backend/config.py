@@ -108,6 +108,15 @@ class Settings(BaseSettings):
     def apns_configured(self) -> bool:
         return bool(self.APNS_KEY_ID and self.APNS_TEAM_ID and self.APNS_AUTH_KEY_PATH and self.APNS_BUNDLE_ID)
 
+    # --- Bilgi katmanı: USDA FoodData Central (public domain besin verisi) ---
+    # Anahtar tanımlı olmasa da DEMO_KEY ile çalışır (düşük hız sınırı).
+    # Üretimde ücretsiz anahtar: https://fdc.nal.usda.gov/api-key-signup
+    USDA_API_KEY: Optional[str] = os.getenv("USDA_API_KEY") or None
+    USDA_FALLBACK_ENABLED: bool = os.getenv("USDA_FALLBACK_ENABLED", "true").lower() == "true"
+    # PubMed canlı sorgu (program üretiminde, cache'li). False ise sadece küratörlü çekirdek.
+    PUBMED_ENABLED: bool = os.getenv("PUBMED_ENABLED", "true").lower() == "true"
+    PUBMED_EMAIL: Optional[str] = os.getenv("PUBMED_EMAIL") or None  # NCBI kibarlık politikası: kimlik e-postası
+
     # --- Rate limiting (PROMPT 6) ---
     RATE_LIMIT_FREE_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_FREE_PER_MINUTE", "10"))
     RATE_LIMIT_PREMIUM_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PREMIUM_PER_MINUTE", "100"))

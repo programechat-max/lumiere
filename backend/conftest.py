@@ -16,6 +16,11 @@ import crud
 import schemas
 
 # Use a separate database file for tests
+# NOT: Testler dosya tabanlı SQLite kullanır ve her testten ÖNCE tüm tablolar
+# temizlenir (bkz. db_session fixture). Böylece uygulamanın istek handler'ları
+# içindeki bağımsız SessionLocal() oturumları da aynı DB'yi görür; dış
+# transaction/savepoint sihirine gerek kalmadan çalışır ve veri testler
+# arasında taşınmaz.
 TEST_SQLALCHEMY_DATABASE_URL = "sqlite:///./test_db.db"
 
 # Override the database module's settings for testing
@@ -26,46 +31,53 @@ db_module.engine = create_engine(
 )
 db_module.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_module.engine)
 
+# Knowledge seed modülü SessionLocal'i import sırasında tuttuğu için test
+# verisinin yanlışlıkla geliştirme sql_app.db'ye yazılmasını engelle.
+import knowledge.seed_knowledge as seed_knowledge_module
+seed_knowledge_module.SessionLocal = db_module.SessionLocal
+
 # Re-import to get the updated engine and SessionLocal
-from database import engine, SessionLocal, get_db
+from database import engine, SessionLocal
 
 # Create the test database tables
 Base.metadata.create_all(bind=engine)
+# create_all mevcut test_db.db'deki yeni kolonları eklemez; gerçek SQLite
+# başlangıcındaki geriye uyumlu şema yükseltmesini test ortamında da çalıştır.
+db_module.migrate_schema()
 
 
 @pytest.fixture
 def db_session():
-    """Create a fresh database session for each test."""
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = SessionLocal(bind=connection)
+    """Create a fresh database session for each test.
 
-    # Override get_db dependency.
-    # NOT: Oturumu burada KAPATMIYORUZ - bu jeneratör FastAPI tarafından HER istekte
-    # çağrılır; bir testte birden fazla client.post/get çağrısı yapıldığında (örn.
-    # register + refresh akışı) session ilk istekten sonra kapanıp ikinci istekte
-    # "This Session/Connection is closed" hatası verirdi. Gerçek kapatma işlemi bu
-    # fixture'ın sonundaki `session.close()` satırında yapılıyor.
-    def override_get_db():
-        yield session
-
-    db_module.get_db = override_get_db
+    Her testten ÖNCE tüm tabloların satırları silinir: önceki testin commit'leri
+    bir sonraki teste sızmaz ve testler çalıştırma sırasından bağımsızdır.
+    """
+    session = SessionLocal()
+    for table in reversed(Base.metadata.sorted_tables):
+        session.execute(table.delete())
+    session.commit()
 
     yield session
 
     session.close()
-    transaction.rollback()
-    connection.close()
 
 
 @pytest.fixture
 def client(db_session):
-    """Create a test client with the overridden database."""
+    """Test client; istekler gerçek get_db ile KENDİ taze oturumunu açar.
+
+    NOT: get_db dependency override'ı bilinçli olarak YOKTUR. db_module.get_db'yi
+    modül seviyesinde değiştirmek `from database import get_db` ile referansı
+    yakalayan modülleri İLK testin oturumuna kilitler ve identity map'ten bayat
+    satır okunmasına yol açar (routes_admin'de tespit edildi). Gerçek get_db,
+    SessionLocal global'ine dinamik baktığı için test engine'ini (test_db.db)
+    zaten kullanır; böylece route oturumları, handler içi SessionLocal()
+    kullanımları ve bu fixture'ın oturumu aynı dosya DB'si üzerinden tutarlı
+    çalışır. Fixture verisi commit edildiği için istekler her şeyi görür.
+    """
     # Import after db_module is patched
     from main import app
-
-    # Override the get_db dependency
-    app.dependency_overrides[get_db] = lambda: (yield db_session)
 
     with TestClient(app) as test_client:
         yield test_client

@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lumiere — Son Plan Uygulama Raporu</title>
+<style>
+  :root {
+    --bg: #f4f1ec;
+    --surface: #fffdf9;
+    --ink: #1c1512;
+    --muted: #6f6259;
+    --accent: #d92835;
+    --border: #e7ddcf;
+    --code-bg: #241b18;
+    --code-ink: #f3e9dc;
+    --ok: #1f7a4d;
+    --ok-soft: #e5f4ec;
+    --warn: #a8640a;
+    --warn-soft: #fdf1dd;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+    padding-bottom: 4rem;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 1.25rem; }
+
+  .hero {
+    background: linear-gradient(160deg, #241b18 0%, #3a2a24 55%, #d92835 170%);
+    color: #f4f1ec;
+    padding: 3.5rem 0 3rem;
+    border-bottom: 3px solid var(--accent);
+  }
+  .hero .eyebrow { letter-spacing: .18em; text-transform: uppercase; font-size: .72rem; font-weight: 800; color: #e7a29a; }
+  .hero h1 { font-size: clamp(1.8rem, 4.5vw, 2.7rem); line-height: 1.15; margin-top: .5rem; font-weight: 900; letter-spacing: -.02em; }
+  .hero p { margin-top: .9rem; max-width: 640px; color: #d8ccc2; }
+  .hero .meta { margin-top: 1.4rem; display: flex; flex-wrap: wrap; gap: .5rem; }
+  .tag { background: rgba(244,241,236,.12); border: 1px solid rgba(244,241,236,.22); padding: .3rem .7rem; border-radius: 999px; font-size: .78rem; font-weight: 600; }
+
+  h2 { font-size: 1.4rem; font-weight: 900; letter-spacing: -.01em; margin: 3.2rem 0 1.1rem; padding-top: .4rem; display: flex; align-items: center; gap: .6rem; }
+  h2 .num { display: inline-grid; place-items: center; width: 30px; height: 30px; background: var(--ink); color: #f4f1ec; border-radius: 10px; font-size: .9rem; font-weight: 900; }
+  h3 { font-size: 1.05rem; font-weight: 800; margin: 2.2rem 0 .7rem; }
+  h3 .k { color: var(--accent); margin-right: .4rem; }
+  p { margin: .6rem 0; }
+  ul, ol { margin: .6rem 0 .6rem 1.3rem; }
+  li { margin: .3rem 0; }
+  .muted { color: var(--muted); font-size: .95rem; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .9rem; margin: 1.2rem 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 1.1rem 1.15rem; box-shadow: 0 10px 28px -18px rgba(60,32,28,.25); }
+  .card .big { font-size: 1.7rem; font-weight: 900; color: var(--accent); line-height: 1.1; }
+  .card .t { font-weight: 700; font-size: .95rem; margin-top: .25rem; }
+  .card .d { font-size: .82rem; color: var(--muted); margin-top: .3rem; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 1.15rem 1.3rem; margin: 1rem 0; }
+  .ok { background: var(--ok-soft); border-color: #bfe2cd; }
+  .warn { background: var(--warn-soft); border-color: #eed3a3; }
+
+  pre { background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 1rem 1.15rem; overflow-x: auto; font-size: .82rem; line-height: 1.55; margin: .8rem 0; font-family: "SF Mono", Menlo, Consolas, monospace; }
+  code { font-family: "SF Mono", Menlo, Consolas, monospace; }
+  code.inline { background: #efe7dd; color: #5a2b2b; padding: .1rem .35rem; border-radius: 6px; font-size: .85em; }
+
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .88rem; background: var(--surface); border-radius: 14px; overflow: hidden; }
+  th { background: #efe7dd; text-align: left; padding: .6rem .75rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  td { padding: .6rem .75rem; border-top: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: #faf6f0; }
+
+  .arrow { color: var(--accent); font-weight: 800; }
+  .toc { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem; margin: 1.4rem 0; }
+  .toc a { text-decoration: none; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: .6rem .8rem; font-size: .83rem; font-weight: 700; }
+  .toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+  footer { margin-top: 3.5rem; border-top: 1px solid var(--border); padding-top: 1.4rem; color: var(--muted); font-size: .85rem; }
+  .divider { height: 1px; background: var(--border); margin: 2.4rem 0; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Lumiere · Uygulama Raporu</div>
+    <h1>Son Plan Kapsamında Yapılan<br />Değişiklikler &amp; Doğrulamalar</h1>
+    <p>
+      Bu rapor; çalışma ağacındaki son plandaki uygulanan değişiklikleri — backend
+      <strong>Bilgi Katmanı (Knowledge Layer)</strong> paketini, bu paketi kullanan
+      AI koç / fitness üretim zincirini, frontend <strong>UI yenileme</strong> çalışmasını
+      ve bu oturumda yapılan <strong>sağlamlık düzeltmeleri</strong> ile tüm doğrulama
+      sonuçlarını örneklerle belgeler.
+    </p>
+    <div class="meta">
+      <span class="tag">Tarih: 10 Eylül 2026</span>
+      <span class="tag">Dal: main</span>
+      <span class="tag">Backend · Frontend · iOS</span>
+      <span class="tag">56/56 test geçti</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <nav class="toc">
+    <a href="#ozet">1 · Özet</a>
+    <a href="#mimari">2 · Bilgi Katmanı Mimarisi</a>
+    <a href="#moduller">3 · Modül Detayları &amp; Örnekler</a>
+    <a href="#ai_core">4 · AI Üretim Zinciri Entegrasyonu</a>
+    <a href="#duzeltmeler">5 · Bu Oturumdaki Düzeltmeler</a>
+    <a href="#frontend">6 · Frontend UI Yenileme</a>
+    <a href="#dogrulama">7 · Doğrulama Sonuçları</a>
+  </nav>
+
+</div>
+<section id="ozet">
+  <h2><span class="num">1</span> Özet ve Kapsam</h2>
+  <p>Son plan iki ana iş kolunu tek pakette ilerletti: <strong>backend Bilgi Katmanı</strong>
+  (AI'nın uydurmadan, doğrulanmış veritabanı verisiyle yanıt vermesini sağlayan somut veri
+  havuzları + bilimsel kaynaklar) ve <strong>frontend UI yenileme</strong> (TypeScript geçişi,
+  yeni ekran mimarisi ve "luminous-interface-love" tasarım sistemi). Bu oturumda ise plandaki
+  testlerin 4 tanesi çözülerek paket <strong>tamamen yeşil</strong> hale getirildi.</p>
+
+  <div class="cards">
+    <div class="card"><div class="big">8</div><div class="t">Yeni backend modülü</div><div class="d">knowledge/* paketi: cache, usda_client, food_db, exercise_library, science, weak_areas + seed verisi</div></div>
+    <div class="card"><div class="big">3</div><div class="t">Yeni veritabanı tablosu</div><div class="d">food_items, exercise_library_items, research_notes (global kullanıcı bağımsız)</div></div>
+    <div class="card"><div class="big">15/15</div><div class="t">Bilgi katmanı testi</div><div class="d">test_knowledge.py — oturum başında 4'ü kırıktı, hepsi düzeltildi</div></div>
+    <div class="card"><div class="big">56/56</div><div class="t">Toplam backend test</div><div class="d">auth, crud, platform-upgrade + knowledge paketi tamamı</div></div>
+    <div class="card"><div class="big">42+35+12</div><div class="t">Seed verisi</div><div class="d">besin · egzersiz · araştırma notu (idempotent seed ile dolu)</div></div>
+    <div class="card"><div class="big">TS</div><div class="t">Frontend tam geçiş</div><div class="d">jsx→tsx, tek store, 6 sekmeli navigasyon, pedometre motoru</div></div>
+  </div>
+
+  <div class="panel warn">
+    <strong>Doküman dili:</strong> Örnek kodlar ve çıktılar üretim kodundan birebir alınmıştır;
+    başlıklardaki İ/ö/ü gibi özel karakterler Türkçe arayüz sözleşmesi gereği korunmuştur.
+  </div>
+</section>
+<section id="mimari">
+  <h2><span class="num">2</span> Bilgi Katmanı Mimarisi</h2>
+  <p>Bilgi katmanı; AI'nın sohbet ve fitness planı üretirken <em>uydurmak yerine seçmesini</em>
+  sağlayan, kullanıcıdan bağımsız (global) üç tablo üzerine kuruludur:</p>
+
+  <table>
+    <tr><th>Tablo</th><th>Model</th><th>İçerik</th><th>Kaynaklar</th></tr>
+    <tr><td><code class="inline">food_items</code></td><td>FoodItem</td><td>100g başına kalori/makro + porsiyon + diyet tag'leri</td><td>USDA (public domain) + Türk mutfağı kürasyonu (<code class="inline">local_tr</code>)</td></tr>
+    <tr><td><code class="inline">exercise_library_items</code></td><td>ExerciseLibraryItem</td><td>Kanonik hareket adı, kas grubu, ekipman, rep-bias, teknik ipucu, PMID kanıtları</td><td>ai_core'daki hardcoded hipertrofi listesinin tabloya taşınmış hâli</td></tr>
+    <tr><td><code class="inline">research_notes</code></td><td>ResearchNote</td><td>Küratörlü bilimsel bulgu özeti (hacim, frekans, gerilme, deload vb.) + PMID</td><td>Küratörlü çekirdek + Redis'li TTL cache üzerinden canlı PubMed</td></tr>
+  </table>
+
+  <h3><span class="k">▸</span> Tasarım ilkeleri</h3>
+  <ol>
+    <li><strong>HİBRİT VERİ:</strong> Lokal tablo her zaman yeterlidir; USDA/PubMed yalnızca tabloda olmayan kayıtlar için devreye girer ve sonucu kalıcı tabloya yazar.</li>
+    <li><strong>GRACEFUL FALLBACK:</strong> Harici API erişilemezse uygulama asla bozulmaz — sadece küratörlü lokal çekirdek kullanılır (<code class="inline">None</code> döner).</li>
+    <li><strong>TUTARLILIK:</strong> AI hareketleri kütüphaneden seçer → <code class="inline">WorkoutLog</code> eşleşmeleri ve <code class="inline">progression.py</code> string tabanlı overload önerileri güvenilir çalışır.</li>
+    <li><strong>İDOMPOTENT SEED:</strong> Seed script'i aynı veriyi ikinci kez eklemez; makro güncellemeleri elle müdahale hakkı gerektirdiği için üzerine yazmaz.</li>
+  </ol>
+
+  <h3><span class="k">▸</span> Akış haritası (generate_meal_plan)</h3>
+  <pre><code>1. search_candidate_foods()    <- lokal tablodan diyet kısıtlarına uyan ADAY BESİN HAVUZU
+2. resolve_food_name()         <- tabloda yoksa USDA'da ara, sonucu tabloya yaz (pending_review)
+3. AI plan üretir (prompt'a havuz + kalite kuralları verilir)
+4. verify_and_fix_meal_plan()  <- makroları tablodan YENİDEN hesapla,
+                                   %5'ten fazla sapmada doğru değerleri yaz</code></pre>
+
+  <h3><span class="k">▸</span> Yeni migration</h3>
+  <div class="panel">
+    <p class="muted" style="margin-top:0"><code class="inline">backend/alembic/versions/b8c4f7a2e1d9_add_knowledge_layer_tables.py</code></p>
+    <p>Revision zinciri: <code class="inline">a1f2c3d4e5b6 → b8c4f7a2e1d9 (head)</code>. Migration
+    <strong>idempotent</strong> tasarlandı: tablo zaten varsa (ör. create_all zaten
+    oluşturmuşsa) dokunmaz, atlar:</p>
+    <pre><code>def upgrade():
+    conn = op.get_bind()
+    existing = _existing_tables(conn)          # mevcut tablolar
+    for table_name, columns, indexes in TABLES:
+        if table_name in existing:
+            continue                            # idempotent: dokunma
+        op.create_table(table_name, *columns)
+        for index_name, index_cols in indexes:
+            op.create_index(op.f(index_name), table_name, index_cols)</code></pre>
+  </div>
+
+  <h3><span class="k">▸</span> Config eklemeleri</h3>
+  <pre><code>USDA_API_KEY: Optional[str] = os.getenv("USDA_API_KEY")           # yoksa DEMO_KEY ile çalışır
+USDA_FALLBACK_ENABLED: bool = os.getenv("USDA_FALLBACK_ENABLED", "true").lower() == "true"
+PUBMED_ENABLED: bool = os.getenv("PUBMED_ENABLED", "true").lower() == "true"
+PUBMED_EMAIL: Optional[str] = os.getenv("PUBMED_EMAIL")           # NCBI kibarlık politikası</code></pre>
+</section>
+
+<section id="moduller">
+  <h2><span class="num">3</span> Modül Detayları &amp; Örnekler</h2>
+
+  <h3><span class="k">▸</span> 3.1 <code class="inline">cache.py</code> — TTL cache (Redis → süreç-içi)</h3>
+  <p>USDA ve PubMed çağrıları için iki katmanlı önbellek. Redis yoksa süreç-içi sözlüğe
+  düşer; aynı besin/konu için API'ye tekrar tekrar gidilmez. TTL'ler: besin 30 gün,
+  PubMed 7 gün, kütüphane araması 6 saat.</p>
+
+  <h3><span class="k">▸</span> 3.2 <code class="inline">usda_client.py</code> — USDA FoodData Central</h3>
+  <p>API anahtarı tanımlı olmasa da <code class="inline">DEMO_KEY</code> ile çalışır; hata durumunda
+  <code class="inline">None</code> döner — çağıran lokal tabloyla devam eder:</p>
+  <pre><code>def search_foods_usda(query: str, limit: int = 5):
+    ...
+    params = { "api_key": _api_key(), "query": query, "pageSize": min(limit, 25),
+               "dataType": "Foundation,SR Legacy", "sortBy": "dataType.keyword" }
+    resp = requests.get(f"{USDA_BASE_URL}/foods/search", params=params, timeout=8)
+    ...
+    # Örnek dönüş (100g başına):
+    # [ { "name": "Chicken Breast, grilled", "fdc_id": 171080,
+    #     "calories": 165, "protein": 31.0, "carbs": 0.0, "fats": 3.6 } ]</code></pre>
+
+  <h3><span class="k">▸</span> 3.3 <code class="inline">food_db.py</code> — besin havuzu &amp; makro doğrulama</h3>
+  <ul>
+    <li><strong>Aday havuzu:</strong> <code class="inline">search_candidate_foods()</code> diyet
+    kısıtlarına uyan besinleri kategori karışımıyla döndürür. Diyet tespiti
+    <code class="inline">_diet_allows()</code> ile yapılır (vegan / vejetaryen / glutensiz / laktozsuz):
+    <pre><code># Kullanıcı "vegan" yazdıysa:
+#   sadece dietary_tags'inde "vegan" olanlar havuza girer
+#   "Menemen" (vegetarian,gluten_free) -&gt; ELENIR
+#   "Mercimek Çorbası" (vegan,...)      -&gt; HAVUZA GIRER</code></pre></li>
+    <li><strong>İsim çözümleme:</strong> <code class="inline">resolve_food_name()</code> çekim eklerine
+    ve parantez notlarına dayanıklıdır; kelime sınırına duyarlı eşleşme yapar
+    (<code class="inline">"yumurta"</code> → <em>Yumurta (haşlanmış)</em>, "menemen yumurtalı" alias'ına
+    yanlışlıkla düşmez).</li>
+    <li><strong>Makro doğrulama:</strong> <code class="inline">verify_and_fix_meal_plan()</code> AI'nın
+    beyan ettiği makroları tablodan <em>yeniden hesaplar</em>.</li>
+  </ul>
+
+  <h4>Gerçek test örneği — %5 sapma kuralı</h4>
+  <div class="panel">
+    <p class="muted" style="margin-top:0"><strong>Girdi:</strong> <code class="inline">"150g tavuk göğsü (ızgara)"</code> — AI 300 kcal beyan etti. <strong>Gerçek:</strong> 165 kcal × 1.5 = 247.5 kcal (%21 sapma).</p>
+    <pre><code># test_knowledge.py:test_verify_macro_plan_with_calorie_deviation
+plan = [{ "meal_name": "Öğle Yemeği",
+          "description": "150g tavuk göğsü (ızgara)",
+          "calories": 300, "protein": 46.5, "carbs": 0, "fats": 5.4 }]
+
+fixed_items, fixed_flag = verify_and_fix_meal_plan(seeded_db, plan)
+assert fixed_items[0]["calories"] == pytest.approx(248, abs=5)  # DOĞRU değer
+assert fixed_flag is True                                       # düzeltme yapıldı</code></pre>
+    <p class="ok panel" style="margin-top:.6rem"><strong>Sonuç:</strong> AI'nın uydurma kalorisi atıldı; tablodan hesaplanan gerçek 248 kcal yazıldı.</p>
+  </div>
+
+  <h4>Gerçek test örneği — tolerans içinde</h4>
+  <div class="panel">
+    <pre><code># test_knowledge.py:test_verify_macro_plan_within_tolerance
+plan = [{ "meal_name": "Kahvaltı",
+          "description": "60g yumurta (haşlanmış)",
+          "calories": 93.0, ... }]   # gerçek 155x0.6=93.0 -&gt; %0 sapma
+fixed_items, fixed_flag = verify_and_fix_meal_plan(seeded_db, plan)
+assert fixed_items[0]["calories"] == pytest.approx(93, abs=2)
+assert fixed_flag is False          # tolerans içinde: dokunulmaz</code></pre>
+  </div>
+
+  <h3><span class="k">▸</span> 3.4 <code class="inline">exercise_library.py</code> — kanonik kütüphane &amp; kaçış vanası</h3>
+  <p>AI'nin ürettiği hareket adları kütüphanedeki <strong>kanonik isimle</strong> eşleştirilir
+  (progression string eşleşmelerinin tutarlı çalışması için). Kütüphanede gerçekten yoksa
+  <code class="inline">pending_review=True</code> ile eklenir ve <em>sonraki üretimlerde</em> kullanılabilir:</p>
+  <pre><code># test: AI "Zercher Squat" üretti, kütüphanede yok
+reconciled, added = reconcile_program_with_library(seeded_db, raw_programs)
+assert added[0]["name"] == "Zercher Squat"
+item = db.query(ExerciseLibraryItem).filter_by(name="Zercher Squat").first()
+assert item.pending_review is True      # kaçış vanası: gözden geçirme kuyruğu
+
+# SIRA TAMAMEN SONRAKI ÜRETIMDE:
+reconciled, added = reconcile_program_with_library(seeded_db, raw2)
+assert added == []                       # artık kütüphanede: tekrar eklenmez</code></pre>
+</section>
+
+<section id="moduller2">
+  <h3><span class="k">▸</span> 3.5 <code class="inline">science.py</code> — küratörlü araştırma + canlı PubMed</h3>
+  <p>Deterministik küratörlü çekirdek her üretimde aynı bağlamı verir (PubMed erişilemezse
+  fallback). Seed'deki gerçek kayıt örneği:</p>
+  <pre><code>- Gerilmiş pozisyonda yük (lengthened loading): hareketin gerilmiş pozisyonda
+  yüklenmesi hipertrofiyi belirgin artırır. KURAL: her kas grubunun programında
+  en az 1 tam-germe odaklı hareket olsun. [PMID:34048677]
+
+# get_research_context deterministik: aynı limit ile iki çağrı -&gt; aynı metin
+ctx1 = get_research_context(seeded_db, limit=12)
+ctx2 = get_research_context(seeded_db, limit=12)
+assert ctx1 == ctx2            # boş tabloda ise "bilimsel bağlam tablosu boş" fallback</code></pre>
+
+  <h3><span class="k">▸</span> 3.6 <code class="inline">weak_areas.py</code> — eksik bölge tespiti</h3>
+  <p>Son 7 gün hacmi vs MAV hedefi, progression stagnasyonu ve deload ihtiyacını
+  birleştirip program prompt'una girecek <strong>ODAK BÖLGELER</strong> talimatını üretir:</p>
+  <pre><code># Örnek çıktı:
+ODAK BÖLGELER: Bu bölgeler eksik/gelişmiyor - programda hacmi ÖNCELİKLİ ver:
+- Karın: Son 7 günde 0 set - haftalık hacim hedefi (~6 set) hiç karşılanmadı.
+- Biceps: Son 7 günde 3 set - hacim hedefinin belirgin altında.
+Bu bölgelere fazladan 2-4 set ekle; diğer bölgelerde hacmi MAV hedefinde tut.
+
+# Veri yoksa (yeni kullanıcı) dengeli dağıtım fallback'i:
+ODAK BÖLGELER: Veriden belirgin eksik bölge tespit edilmedi - hacmi bölgelere dengeli dağıt.</code></pre>
+
+  <h3><span class="k">▸</span> 3.7 Seed verisi — gerçek kayıt örnekleri</h3>
+  <table>
+    <tr><th>Besin (food_items)</th><th>100g</th><th>Tag'ler</th></tr>
+    <tr><td>Menemen</td><td>110 kcal · 6.5P · 5K · 7Y</td><td>vegetarian, gluten_free</td></tr>
+    <tr><td>Tavuk Göğsü (ızgara)</td><td>165 kcal · 31P · 0K · 3.6Y</td><td>high_protein, gluten_free, lactose_free</td></tr>
+    <tr><td>Mercimek (pişmiş)</td><td>116 kcal · 9P · 20K · 0.4Y</td><td>vegan, vegetarian, gluten_free</td></tr>
+    <tr><td>Yulaf</td><td>389 kcal · 16.9P · 66K · 6.9Y</td><td>vegan, vegetarian</td></tr>
+  </table>
+  <p class="muted">Egzersiz kütüphanesi (35 kayıt): Incline Dumbbell Press, Zercher Squat
+  (kaçış vanası örneği) vb. Araştırma notları (12 kayıt): hacim 10-20 set, haftalık 2x
+  frekans, protein 1.6-2.2 g/kg gibi PMID'li bulgular.</p>
+</section>
+
+<section id="ai_core">
+  <h2><span class="num">4</span> AI Üretim Zinciri Entegrasyonu</h2>
+
+  <h3><span class="k">▸</span> 4.1 Sohbet: alan bazlı bilgi retrieval</h3>
+  <p><code class="inline">process_message()</code> artık yanıt üretmeden önce mesajın alanını
+  (<code class="inline">jarvis_brain._detect_query_domain</code>) tespit edip ilgili tablodan
+  <strong>doğrulanmış veri</strong> ekler. Böylece AI besin/egzersiz sorularında uydurmaz,
+  tablodaki gerçek makro/PMID verisiyle yanıt verir:</p>
+  <pre><code># food alani: mesajda geçen besinler -> makro bloğu
+DOĞRULANMIŞ BESİN VERİSİ (makroları bunlardan hesapla, tahmin etme):
+- Tavuk Göğsü (ızgara): 165 kcal, 31.0g P, 0.0g K, 3.6g Y / 100g , porsiyon ~150g
+
+# workout/injury alani: kütüphane eşleşmesi + küratörlü bilimsel bulgular
+BİLGİ KATMANI - İlgili bilimsel bulgular (PMID'li):
+- Kas grubu başına haftalık frekans: ... [PMID:30558493]
+
+# genel alan: hacim/frekans/gerilme ilkeleri
+BİLGİ KATMANI - Bilimsel ilkeler (PMID'li): ...</code></pre>
+  <p class="muted">Bu blok her zaman <em>hata sessizliğiyle</em> sarılır: bir istisna olursa
+  boş string döner ve sohbet asla bozulmaz.</p>
+
+  <h3><span class="k">▸</span> 4.2 Yemek planı üretimi — doğrulanmış besin havuzu</h3>
+  <p><code class="inline">generate_meal_plan()</code> prompt'una artık dört yeni öğe giriyor:</p>
+  <ol>
+    <li><strong>Hedef yaklaşımı:</strong> kalori/makro hedeflerine %5 sapma sınırı ile ulaş.</li>
+    <li><strong>KALİTE KURALLARI (KESİN):</strong> Türk mutfağına uygun malzeme seçimi,
+    öğün başına 25–45g protein dağılımı, her öğünde 1 cümlelik tarif + gramaj, ~25–30g lif,
+    hedefe göre strateji (bulk/cut/forma) ve çeşitlilik kuralı.</li>
+    <li><strong>DOĞRULANMIŞ BESİN VERİ HAVUZU (BİLGİ KATMANI):</strong>
+    <code class="inline">format_candidate_pool()</code> ile tablodan seçilen aday besin
+    listesi — AI ana besinleri bu havuzdan kompoze eder.</li>
+    <li>Ardından çıktı <code class="inline">verify_and_fix_meal_plan()</code> ile makro
+    doğrulamadan geçer (bkz. Bölüm 3.3).</li>
+  </ol>
+
+  <div class="ok panel">
+    <strong>Uçtan uca örnek:</strong> Kullanıcı hedefi "Yağ yakımı + kas koruma", diyet notu
+    "vegan" olsun. Prompt havuzuna <em>yalnızca vegan tag'li</em> besinler girer (Menemen,
+    Tavuk Göğsü elenir; Mercimek Çorbası, Nohut, Yulaf kalır). AI plan üretir; ardından
+    <code class="inline">verify_and_fix_meal_plan</code> beyan edilen kalori/makroları tablodan
+    yeniden hesaplayıp %5'i aşan sapmaları düzeltir.
+  </div>
+
+  <h3><span class="k">▸</span> 4.3 Model zinciri güncellemesi</h3>
+  <table>
+    <tr><th>Ayar</th><th>Önce</th><th>Sonra</th></tr>
+    <tr><td>Birincil model</td><td>gemini-3.1-flash-lite</td><td><strong>gemini-3.5-flash</strong></td></tr>
+    <tr><td>Yedek model (503/429)</td><td>gemini-3.1-flash-lite</td><td><strong>gemini-3.5-flash-lite</strong> (kotada daha şanslı)</td></tr>
+    <tr><td>Video analiz</td><td>gemini-3.1-flash-lite</td><td><strong>gemini-3.5-flash</strong></td></tr>
+  </table>
+</section>
+
+<section id="duzeltmeler">
+  <h2><span class="num">5</span> Bu Oturumdaki Düzeltmeler</h2>
+  <p>Oturum başında <code class="inline">test_knowledge.py</code> <strong>4 başarısız / 11 geçen</strong>
+  durumdaydı. Kök nedenler tek tek bulunarak giderildi ve paket 15/15'e çıkarıldı.</p>
+
+  <table>
+    <tr><th>Hata</th><th>Kök neden</th><th>Çözüm</th></tr>
+    <tr><td>test_reconcile_canonical_rename</td><td><code class="inline">_norm()</code> kullanılıyordu ama hiç tanımlı değildi → <code class="inline">NameError</code></td><td>exercise_library.py'ye <code class="inline">_norm()</code> tanımı eklendi</td></tr>
+    <tr><td>test_reconcile_escape_hatch_*</td><td>aynı NameError (3 testi kırıyordu)</td><td>aynı düzeltme</td></tr>
+    <tr><td>test_verify_macro_plan_with_calorie_deviation</td><td>gramaj+parantezli metin tabloda eşleşmiyordu; %5 düzeltmesi hiç tetiklenmiyordu</td><td><code class="inline">_clean_ingredient_name()</code> + doğru değer yazımı</td></tr>
+    <tr><td>test_verify_macro_plan_within_tolerance</td><td>"yumurta" substring eşleşmesi "menemen yumurtalı" ya düşüyordu</td><td><code class="inline">resolve_food_name()</code>'e kelime sınırına duyarlı eşleşme</td></tr>
+  </table>
+
+  <h3><span class="k">▸</span> D1: exercise_library — tanımsız <code class="inline">_norm()</code></h3>
+  <p>Kütüphanenin birçok fonksiyonu ad normalizasyonu için <code class="inline">_norm()</code>'u çağırıyordu
+  ama fonksiyon hiç tanımlı değildi. Bu sadece testleri değil, production akışın tamamını
+  (<code class="inline">search_library</code>, <code class="inline">match_exercise_name</code>,
+  <code class="inline">reconcile_program_with_library</code>) kırıyordu:</p>
+  <pre><code># eklenen tanım (exercise_library.py)
+def _norm(text: str) -> str:
+    """Karşılaştırma için normalleştirme: küçük harf + fazla boşlukları at."""
+    return " ".join((text or "").strip().lower().split())
+
+# bundan sonra:
+#   search_library(injury_notes="diz ağrısı")  -- kontrendikasyon filtresi çalışır
+#   match_exercise_name("zercher squat")       -- kanonik eşleşme çalışır</code></pre>
+
+  <h3><span class="k">▸</span> D2: food_db — yarım kalmış diyet filtresi</h3>
+  <p><code class="inline">_diet_tag_filters()</code> gövdesi <code class="inline">banned = set()</code>
+  satırında bitiyor, ardından bir sonraki fonksiyonun satırı araya sıkışmıştı (sökülmüş kod).
+  Diyet kısıtları hiç uygulanmıyordu. Yerine tam işlevsel <code class="inline">_diet_allows()</code> yazıldı:</p>
+  <pre><code>def _diet_allows(dietary_notes, tags) -> bool:
+    notes = _norm(dietary_notes)
+    if not notes: return True                      # boş not: her şeye izin
+    if "vegan" in notes:
+        if "vegan" not in tags: return False
+    elif "vejetaryen" in notes or "vegetarian" in notes:
+        if "vegan" not in tags and "vegetarian" not in tags: return False
+    if "gluten" in notes or "glutensiz" in notes:
+        if "gluten_free" not in tags: return False
+    if "laktoz" in notes or "süt" in notes:
+        if "lactose_free" not in tags and "vegan" not in tags: return False
+    return True</code></pre>
+  <div class="ok panel" style="margin-top:.4rem">
+    <strong>Örnek:</strong> <code class="inline">search_candidate_foods(dietary_notes="vegan")</code>
+    artık yalnızca vegan tag'li besinleri döndürür ve havuz yine dolu kalır (test 15/15 içinde doğrulanıyor).
+  </div>
+</section>
+
+<section id="duzeltmeler2">
+  <h3><span class="k">▸</span> D3: verify_and_fix_meal_plan — gramaj/parantez eşleşme hatası</h3>
+  <p>Doğrulama, malzeme metnini olduğu gibi (<code class="inline">"150g tavuk göğsü (ızgara)"</code>)
+  <code class="inline">resolve_food_name()</code>'e gönderiyordu; hiçbir tablo eşleşmesi bulunamıyor,
+  düzeltme hiç tetiklenmiyordu. İki adımlı çözüm uygulandı:</p>
+  <pre><code>def _clean_ingredient_name(text: str) -> str:
+    cleaned = (text or "").lower()
+    cleaned = re.sub(r"^\s*\d+(?:[.,]\d+)?\s*(?:g|gram)\b", " ", cleaned)  # basit gramaj
+    cleaned = re.sub(r"[\(\[].*?[\)\]]", " ", cleaned)                      # parantez notu
+    cleaned = re.sub(r"\b(?:ve|with|ile)\b", " ", cleaned)                  # baglaclar
+    return " ".join(cleaned.split())
+
+# "150g tavuk göğsü (ızgara)"  --&gt;  "tavuk göğsü"  --&gt;  TABLODA EŞLEŞİR
+# porsiyon gramajı yine de orijinal metinden: _extract_portion_g("150g ...") = 150.0</code></pre>
+  <p>Ek olarak eski "porsiyon ölçekle" mantığı kaldırıldı. Artık AI'nın beyan ettiği yanlış
+  makrolar, tablodan hesaplanan <strong>doğru değerlerle</strong> değiştiriliyor — kullanıcının
+  tarifi ve gramajı bozulmadan:</p>
+  <pre><code>if matched_any and item.get("calories"):
+    declared = float(item["calories"] or 0)
+    if declared &gt; 0 and computed["calories"] &gt; 0:
+        if abs(computed["calories"] - declared) / declared &gt; MAX_ADAPT_CALORIE_DEV:
+            fixed = True              # sapma %5'i asiyor: duzeltme gerekli
+if matched_any:
+    # Beyan edilen makrolar yerine tablodan hesaplanan DOĞRU değerleri yaz.
+    item["calories"] = round(computed["calories"], 0)
+    item["protein"]  = round(computed["protein"], 1)
+    item["carbs"]    = round(computed["carbs"], 1)
+    item["fats"]     = round(computed["fats"], 1)</code></pre>
+
+  <h3><span class="k">▸</span> D4: resolve_food_name — kelime sınırına duyarlı eşleşme</h3>
+  <p><code class="inline">ilike "%yumurt%"</code> sorgusu <em>Yumurta (haşlanmış)</em>'ın yanı sıra
+  <em>menemen yumurtalı</em> alias'ını da döndürüyor, sıralamada yanlış kayıt seçilebiliyordu.
+  Artık önce kelime sınırına duyarlı (regex) tam kelime eşleşmesi aranıyor, bulunamazsa
+  içerir-mantığına düşülüyor:</p>
+  <pre><code>def _word_match(q: str, item: FoodItem) -> bool:
+    pattern = re.compile(rf"(?&lt;![a-zçğıöşü0-9]){re.escape(q)}(?![a-zçğıöşü0-9])")
+    return bool(pattern.search(_norm(item.name)) or pattern.search(_norm(item.aliases or "")))
+
+# "yumurta"        -&gt; "_word_match" yalnizca "Yumurta (haşlanmış)" secer
+#                    (menemen YUMURTAlı alias'i kelime sinirina takilmaz)
+# "tavuğu"         -&gt; once tam metin, sonra kelime kademeli ("tavuk"),
+#                    en son stem: cekim eki kirpilir -&gt; Tavuk Göğsü eslesir</code></pre>
+
+  <h3><span class="k">▸</span> D5: Ortam güncellemesi</h3>
+  <p>Ayrıca gerçek SQLite veritabanı bilgi katmanına kavuşturuldu — alembic head'e taşındı ve
+  tablolar dolduruldu:</p>
+  <pre><code># migration uygulandı
+$ alembic upgrade head
+Running upgrade a1f2c3d4e5b6 -&gt; b8c4f7a2e1d9, knowledge layer tabloları
+
+# seed idempotent çalıştırıldı (iki kez, tekrar ekelemedi)
+$ python -m knowledge.seed_knowledge
+[SEED] Besin: +0, Egzersiz: +0, Araştırma notu: +0 (idempotent)
+
+# son durum
+food: 42 | exercises: 35 | research: 12</code></pre>
+</section>
+
+<section id="frontend">
+  <h2><span class="num">6</span> Frontend UI Yenileme</h2>
+  <p>UI planı "luminous-interface-love" tasarım düzenini uygulayıp eski mock tabanlı
+  JSX ekranları gerçek backend'e bağlı, TypeScript'li yeni ekranlarla değiştirdi.</p>
+
+  <h3><span class="k">▸</span> 6.1 TypeScript tam geçişi</h3>
+  <p>Giriş noktası <code class="inline">src/main.jsx → src/main.tsx</code>, uygulama kökü
+  <code class="inline">src/App.jsx → src/App.tsx</code>. Eski 20+ JSX ekran silindi; yerine
+  tip-ile kilitli yeni bileşenler geldi:</p>
+  <pre><code>src/
+  lib/  types.ts · store.ts (gerçek API sözleşmeleri) · planner.ts · pedometer.ts · utils.ts
+  services/ apiClient.ts (Bearer + 401 yenileme + timeout) · authService.ts
+  components/
+    Auth.tsx · chrome.tsx · FlowDaily.tsx · Workout.tsx · Nutrition.tsx
+    CoachProgress.tsx · Settings.tsx · ProgramCreator.tsx · MorningCheckIn.tsx</code></pre>
+
+  <h3><span class="k">▸</span> 6.2 Tek store &amp; gerçek veri</h3>
+  <p><code class="inline">useLumiereStore()</code> artık mock veri yerine
+  <code class="inline">/api/profile</code>, <code class="inline">/api/workout/*</code>,
+  <code class="inline">/api/nutrition/*</code>, <code class="inline">/api/chat/*</code>,
+  <code class="inline">/api/metrics</code> uçlarına bağlanır. Adım sayacı cihaz ivmeölçerinden
+  beslenen gerçek pedometre motoruyla (<code class="inline">lib/pedometer.ts</code>) çalışır.</p>
+
+  <h3><span class="k">▸</span> 6.3 Alt navigasyon — 6 sekme &amp; swipe geçiş</h3>
+  <pre><code>NAV_ORDER = ['flow', 'coach', 'daily', 'workout', 'nutrition', 'progress']
+# Akış · AI Koç · Günlük · Antrenman · Beslenme · Gelişim
+
+# Sekme geçişinde yön bulma + sayfa animasyonu:
+const pi = NAV_ORDER.indexOf(prev);
+const ni = NAV_ORDER.indexOf(next);
+setDir(ni &gt; pi ? 'right' : 'left');        // sağa/sola kayma yönü</code></pre>
+  <p>Dokunmatik swipe ile geçiş (<code class="inline">onTouchStart/onTouchEnd</code>), her sekme
+  değişiminde yukarı kaydırma ve oturum süresi dolunca
+  <code class="inline">lumiere:session-expired</code> ile login'e dönüş davranışları eklendi.</p>
+
+  <h3><span class="k">▸</span> 6.4 Sabah check-in akışı</h3>
+  <p><code class="inline">MorningCheckIn</code> günün ilk açılışında otomatik açılır
+  (<code class="inline">checkinMap[todayISO()]</code> ile günde bir kontrol); "Şimdi değil"
+  denirse gün <em>snoozed</em> işaretlenir ve akışta kart kalır.</p>
+
+  <h3><span class="k">▸</span> 6.5 iOS izinleri</h3>
+  <p><code class="inline">ios/App/App/Info.plist</code>'e hareket izni eklendi (pedometre için):</p>
+  <pre><code>&lt;key&gt;NSMotionUsageDescription&lt;/key&gt;
+&lt;string&gt;Adım sayacı, günlük adım/mesafe/kalori verini gerçek zamanlı
+hesaplamak için hareket ve fitness verilerine (ivmeölçer) erişim gerektirir.&lt;/string&gt;</code></pre>
+
+  <h3><span class="k">▸</span> 6.6 Tasarım sistemi özü</h3>
+  <table>
+    <tr><th>Öğe</th><th>Değer</th></tr>
+    <tr><td>Arka plan</td><td><code class="inline">#f4f1ec</code> (krem) — incognito "warm ivory"</td></tr>
+    <tr><td>Metin</td><td><code class="inline">#1c1512</code> (koyu kahve)</td></tr>
+    <tr><td>Aksan / vurgu</td><td><code class="inline">#d92835</code> (alev kırmızısı) — logo "ember-btn"</td></tr>
+    <tr><td>Yüzey / border</td><td><code class="inline">#fffdf9</code> / <code class="inline">#e7ddcf</code></td></tr>
+    <tr><td>Bileşenler</td><td>Logo, PageHeader, BottomNav (chime.tsx), ProgressRing, kartlar</td></tr>
+  </table>
+  <p class="muted">Ayrıca <code class="inline">index.html</code> theme-color krem tona
+  (<code class="inline">#f4f1ec</code>) güncellendi; iOS tarayıcı/sistem bütünlüğü sağlandı.</p>
+</section>
+
+<section id="dogrulama">
+  <h2><span class="num">7</span> Doğrulama Sonuçları</h2>
+  <p>Yapılan tüm değişiklikler aşağıdaki kontrollerden geçirildi:</p>
+
+  <table>
+    <tr><th>Kontrol</th><th>Komut</th><th>Sonuç</th></tr>
+    <tr><td>Bilgi katmanı testleri</td><td><code class="inline">python -m pytest test_knowledge.py -q</code></td><td><strong>15 passed</strong></td></tr>
+    <tr><td>Tüm backend testleri</td><td><code class="inline">python -m pytest -q</code></td><td><strong>56 passed</strong> (auth + crud + platform-upgrade + knowledge)</td></tr>
+    <tr><td>Migration durumu</td><td><code class="inline">alembic current</code></td><td><code class="inline">b8c4f7a2e1d9 (head)</code></td></tr>
+    <tr><td>Seed verisi</td><td><code class="inline">python -m knowledge.seed_knowledge</code></td><td>42 besin · 35 egzersiz · 12 araştırma (idempotent)</td></tr>
+    <tr><td>Frontend build</td><td><code class="inline">npm run build</code></td><td>başarılı (vite)</td></tr>
+    <tr><td>Syntax + import</td><td><code class="inline">ast.parse</code> tüm knowledge modülleri, <code class="inline">import ai_core</code></td><td>OK</td></tr>
+  </table>
+
+  <div class="ok panel">
+    <strong>Uygulama notu:</strong> Tüm bu değişiklikler commit edilmeden çalışma ağacında
+    bekliyor; kullanıcı istediğinde ayrı commit'lere ayrıştırılabilir (backend bilgi katmanı /
+    frontend UI / düzeltmeler).
+  </div>
+</section>
+
+<div class="divider"></div>
+<footer>
+  <p><strong>Lumiere — Son Plan Uygulama Raporu</strong> · 10 Eylül 2026</p>
+  <p class="muted">Belge, üretim kodundan ve canlı test çıktılarından derlendi. Kod
+  örnekleri <code class="inline">backend/knowledge/</code>, <code class="inline">backend/ai_core.py</code>,
+  <code class="inline">src/App.tsx</code> ve ilgili dosyalardan alınmıştır.</p>
+</footer>
+
+</body>
+</html>

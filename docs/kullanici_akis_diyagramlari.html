@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumiere — Yeni Kullanıcı Akış Arkaplanı</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 2rem; background: #0c0d10; color: #e9e9ec; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
+  header { max-width: 1100px; margin: 0 auto 2rem; }
+  h1 { font-size: 1.5rem; margin: 0 0 .3rem; }
+  header p { color: #9a9aa2; margin: 0; font-size: .95rem; }
+  nav { max-width: 1100px; margin: 0 auto 1.5rem; display: flex; gap: .5rem; flex-wrap: wrap; }
+  nav button { background: #1a1c22; color: #e9e9ec; border: 1px solid #2c2f38; border-radius: 10px; padding: .5rem .9rem; cursor: pointer; font-size: .85rem; }
+  nav button:hover { border-color: #d92835; }
+  main { max-width: 1100px; margin: 0 auto; }
+  section { display: none; }
+  section.active { display: block; }
+  .card { background: #14161b; border: 1px solid #23262e; border-radius: 16px; padding: 1.4rem; }
+  .card h2 { font-size: 1.1rem; margin: 0 0 1rem; color: #ffd7d9; }
+  .legend { color: #9a9aa2; font-size: .85rem; margin-top: 1rem; line-height: 1.6; }
+  .mermaid { display: flex; justify-content: center; overflow-x: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lumiere — Yeni Kullanıcı Akış Arkaplanı</h1>
+  <p>Gerçek kod karşılıkları: main.py, ai_core.py, store.ts. Sekmelerden akışları incele.</p>
+</header>
+
+<nav>
+  <button data-t="t1">1 · Genel Yolculuk</button>
+  <button data-t="t2">2 · Video Analizi</button>
+  <button data-t="t3">3 · Antrenman Üretimi</button>
+  <button data-t="t4">4 · Beslenme Üretimi</button>
+  <button data-t="t5">5 · Sesli Anlatım</button>
+</nav>
+
+<main>
+<section id="t1" class="active">
+  <div class="card">
+    <h2>Kayıttan programlara genel yolculuk</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["📱 Kayıt / Giriş<br/>POST /api/register → JWT"] --> B["📋 Onboarding Formu (9 adım)<br/>hedef, kilo, yaş/boy, seviye, gün sayısı"]
+    B --> C["🎥 Adım 7: Vücut Videosu (10-15 sn)<br/>POST /api/onboarding/video"]
+    C --> C1["(ops.) 🎤 Sesli Anlatım<br/>POST /api/onboarding/voice"]
+    C1 --> D["✅ Tamamla<br/>PUT /api/profile + POST /api/onboarding/complete<br/>→ video analizi kalıcı hafızaya"]
+    D --> E["📝 Program Oluşturucu Anketleri"]
+    E --> F["🏋️ Antrenman anketi bitti<br/>POST /api/program-builder/workout"]
+    F --> F1["🤖 generate_workout_program<br/>split + egzersiz havuzu + AI"]
+    E --> G["🥗 Beslenme anketi bitti<br/>POST /api/program-builder/nutrition"]
+    G --> G1["🤖 generate_meal_plan<br/>besin havuzu + AI + makro doğrulama"]
+    F1 --> H["📊 Uygulama: günlük antrenman + öğünler,<br/>koç sohbeti, progress takibi"]
+    G1 --> H
+    </pre>
+    <p class="legend">Onboarding bitince program üretimi beklemeye alınır; gerçek üretim Program Oluşturucu anket cevaplarıyla tetiklenir (boş bekleme yok, daha kişisel bağlam).</p>
+  </div>
+</section>
+
+<section id="t2">
+  <div class="card">
+    <h2>Video attığında arkada ne oluyor?</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["🎥 Video yükleme (webm/mp4, ≤300MB)<br/>JWT + rate limit ai_media"] --> B["💾 Disk: user_videos/onboarding_TS.webm"]
+    B --> C{"🎬 Kare çıkarımı<br/>_extract_video_frames"}
+    C -- "evet (tercih)" --> D1["🖼️ Kare tabanlı analiz (iOS codec güvenli)"]
+    C -- "hayır" --> E{"📤 Files API<br/>_upload_video_to_gemini"}
+    E -- "başarılı" --> D2["☁️ Dosya referansı ile analiz"]
+    E -- "başarısız / ≤15MB" --> D3["📦 Inline base64"]
+    D1 --> F["🧠 Gemini VISION<br/>system prompt = profil + UserMemory"]
+    D2 --> F
+    D3 --> F
+    F --> G["📋 JSON: report + memory_summary<br/>+ training/nutrition_instruction"]
+    G --> H["🧠 UserMemory: physique_analysis"]
+    G --> I["📱 onboarding/complete ile<br/>UserMemory: onboarding_video_analysis"]
+    </pre>
+    <p class="legend">Rapor ekranda gösterilir; özet kalıcı hafızaya yazılır. Sonraki program üretiminde AI kullanıcının fiziğini "hatırlar".</p>
+  </div>
+</section>
+
+<section id="t3">
+  <div class="card">
+    <h2>Antrenman programı üretimi (anket sonrası)</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["📝 Anket cevapları"] --> B["💾 Profil alanlarına yazılır"]
+    B --> C["👤 Profil: deneyim, hedef, odak, sakatlık"]
+    C --> D["🧮 Bilimsel parametreler<br/>level → MEV/MAV/MRV + periodizasyon + RPE"]
+    D --> E["📅 Split Planlayıcı<br/>build_split (PPL / Upper-Lower / Full Body)"]
+    E --> F["🏋️ Akıllı Egzersiz Seçici<br/>grup başı en iyi 8 hareket, filtreli"]
+    F --> G["🔬 Küratörlü Kanıt (PMID'li)"]
+    G --> H["📉 Zayıf Bölge Tespiti"]
+    H --> I["📄 Odak Grup PubMed Canlı Blok"]
+    I --> J["🧠 GEMINI: kilitli hareket havuzu +<br/>MAV kuralları + stretch prensibi → JSON"]
+    J --> K["🔗 Kütüphane Uzlaştırma<br/>bilinmeyen → pending_review"]
+    K --> L["💾 WorkoutProgram tabloları → uygulama"]
+    </pre>
+    <p class="legend">Kritik: AI boş hayal kurmaz — hareketler kilitli kütüphane havuzundan, gün dağılımı bilimsel split şablonundan, kanıtlar PMID'lidir.</p>
+  </div>
+<section id="t4">
+  <div class="card">
+    <h2>Beslenme planı üretimi</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["📝 Anket cevapları"] --> B["💾 Profil alanlarına yazılır"]
+    B --> C["👤 Hedefler: kalori/protein/karb/yağ<br/>+ dietary_notes"]
+    C --> D["🥗 Doğrulanmış Besin Havuzu<br/>42 temel + 59 TR kürasyon + USDA"]
+    D --> E["🍽️ Öğün sayısı: anket tercihi<br/>(yoksa 3-5 kılavuzu)"]
+    E --> F["🧠 GEMINI: Türk mutfağı kuralları,<br/>%5 sapma, protein dağılımı"]
+    F --> G["🔍 Makro Doğrulama<br/>verify_and_fix_meal_plan:<br/>%5+ sapan porsiyon düzeltilir"]
+    G --> H{"💾 Kaydet?"}
+    H -- "evet" --> I["📦 replace_meal_plan → günlük plan"]
+    H -- "hayır" --> J["📝 Taslak (onay akışı)"]
+    </pre>
+    <p class="legend">Besin makroları AI'ya güvenilmez: USDA + TR kürasyonundan doğrulanmış 100g değerlerinden yeniden hesaplanır.</p>
+  </div>
+</section>
+
+<section id="t5">
+  <div class="card">
+    <h2>Sesli anlatım (opsiyonel kol)</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["🎤 Ses kaydı (webm/ogg)"] --> B["💾 user_audio/"]
+    B --> C["📝 transcribe_audio → metin"]
+    C --> D["🧠 extract_profile_from_transcript<br/>profile_updates + summary + memory_summary"]
+    D --> E["👤 UserProfile + UserMemory"]
+    </pre>
+    <p class="legend">Kullanıcının sesli anlattığı kısıtlamalar/sakatlıklar/rutin profil alanlarına işlenir; sonraki tüm üretimlerde hesaba katılır.</p>
+  </div>
+</section>
+</main>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });
+  document.querySelectorAll('nav button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+      document.getElementById(btn.dataset.t).classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
+</section>

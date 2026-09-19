@@ -39,6 +39,8 @@
 	<string>Vücut videosu kaydederek fizik analizinin yapılabilmesi için kameraya erişim gerekiyor. Bu özellik isteğe bağlıdır.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Beslenme ve antrenman rutinini sesli anlatabilmen için mikrofona erişim gerekiyor. Bu özellik isteğe bağlıdır.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Adım sayacı, günlük adım/mesafe/kalori verini gerçek zamanlı hesaplamak için hareket ve fitness verilerine (ivmeölçer) erişim gerektirir.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

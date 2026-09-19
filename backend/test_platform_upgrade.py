@@ -82,6 +82,19 @@ def test_rbac_allows_admin(db_session, client, test_user, auth_headers):
     assert "data" in res.json()
 
 
+def test_direct_workout_write_cannot_bypass_knowledge_validator(client, auth_headers):
+    response = client.post("/api/workout/program", headers=auth_headers, json={
+        "day_name": "Pazartesi",
+        "is_active": True,
+        "exercises": [{
+            "name": "Uydurma Hareket", "target_sets": 3, "target_reps": "8-12",
+            "muscle_group": "Bilinmeyen Bölge", "equipment": "machine",
+        }],
+    })
+    assert response.status_code == 422
+    assert "bilinmeyen kas grubu" in response.json()["detail"]
+
+
 # ==========================================
 # RATE LIMITING & PAGINATION
 # ==========================================

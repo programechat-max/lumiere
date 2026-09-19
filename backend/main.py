@@ -77,6 +77,20 @@ app.include_router(monitoring.router)
 @app.on_event("startup")
 def _on_startup():
     app_scheduler.start_scheduler()
+    # FAZ 6: besin kütüphanesi genişletmesi (idempotent, hata halinde sessizce geçer)
+    try:
+        from database import SessionLocal
+        from knowledge.food_db import seed_turkish_expansion
+
+        db = SessionLocal()
+        try:
+            _added = seed_turkish_expansion(db)
+            if _added:
+                logger.info("[STARTUP] Türk besin genişletmesi: %d yeni besin eklendi", _added)
+        finally:
+            db.close()
+    except Exception as _food_seed_exc:  # noqa: BLE001
+        logger.warning("[STARTUP] Besin genişletmesi atlandı: %s", _food_seed_exc)
 
 
 @app.on_event("shutdown")
@@ -492,7 +506,26 @@ async def analyze_nutrition_photo(file: UploadFile = File(...), current_user: mo
 
 @app.post("/api/nutrition/photo/confirm", response_model=schemas.NutritionLogResponse)
 def confirm_nutrition_photo(entry: schemas.NutritionLogCreate, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
-    """Web'de fotoğraf analizi sonrası kullanıcının onayladığı öğünü kaydeder."""
+    """Web'de fotoğraf analizi sonrası kullanıcının onayladığı öğünü kaydeder.
+    FAZ 7: malzeme metni besin tablosundan çözülebiliyorsa AI tahminleri yerine
+    DOĞRULANMIŞ makro/mikro değerler yazılır (Telegram akışıyla aynı doğrulama
+    katmanı); hiçbir malzeme eşleşmezse AI değerleri tahmin olarak kalır."""
+    if not entry.verification_source and entry.ingredients:
+        try:
+            from knowledge.food_db import verify_manual_meal
+            vd = verify_manual_meal(db, entry.ingredients)
+            if vd.get("items"):
+                t = vd["totals"]
+                entry.calories = round(t["calories"])
+                entry.protein = round(t["protein"], 1)
+                entry.carbs = round(t["carbs"], 1)
+                entry.fats = round(t["fats"], 1)
+                entry.verification_source = vd.get("validation_source") or "local_db"
+                entry.verified = True
+                entry.micros = t.get("micros") or None
+                entry.items_breakdown = vd.get("items")
+        except Exception as e:
+            logger.warning(f"[NUTRITION] Fotoğraf onayı doğrulaması atlandı: {e}")
     return crud.create_nutrition_log(db, entry, current_user.id)
 
 
@@ -783,6 +816,24 @@ def get_muscle_heatmap_for_day(day: str, current_user: models.User = Depends(aut
 
 @app.post("/api/workout/program", response_model=schemas.WorkoutProgramResponse)
 def create_program(program: schemas.WorkoutProgramCreate, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    # Doğrudan yazma yolu da AI üretimiyle aynı bilgi katmanı kapısından geçer.
+    # Aksi halde geçersiz/manual bir program daha sonra aktif plan olarak
+    # kullanılabilir ve günlük hacim/kanonik hareket kurallarını baypas eder.
+    from knowledge.program_validator import assert_valid_program
+    raw = [{
+        "day_name": program.day_name,
+        "exercises": [exercise.model_dump() for exercise in program.exercises],
+    }]
+    profile = crud.get_or_create_profile(db, current_user.id)
+    months = profile.experience_months or 0
+    level = "beginner" if months < 6 else "intermediate" if months < 24 else "advanced"
+    try:
+        assert_valid_program(
+            raw, db=db, level=level, goal=profile.goal or "recomp",
+            focus_group=profile.focus_muscle_group,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return crud.create_workout_program(db, program, user_id=current_user.id)
 
 

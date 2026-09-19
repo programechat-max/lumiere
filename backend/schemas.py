@@ -134,6 +134,12 @@ class NutritionLogCreate(BaseModel):
     carbs: float = Field(default=0.0, ge=0)
     fats: float = Field(default=0.0, ge=0)
     calories: float = Field(default=0.0, ge=0)
+    # FAZ 7 — doğrulama/mikro katmanı (opsiyonel, geriye uyumlu)
+    verification_source: Optional[str] = None
+    verified: Optional[bool] = False
+    confidence: Optional[str] = None
+    micros: Optional[dict] = None
+    items_breakdown: Optional[list] = None
 
 class NutritionLogResponse(NutritionLogCreate):
     id: int

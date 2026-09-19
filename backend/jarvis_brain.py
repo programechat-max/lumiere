@@ -29,6 +29,7 @@ CATEGORY_BOOST = {
     "workout": {"preference": 2, "insight": 2, "physique_analysis": 3, "note": 1},
     "injury": {"preference": 3, "note": 3, "physique_analysis": 2},
     "sleep": {"note": 3, "preference": 2},
+    "science": {"insight": 3, "note": 1},
     "general": {"preference": 2, "insight": 2, "analysis": 1, "note": 1},
 }
 
@@ -36,6 +37,13 @@ FOOD_WORDS = {"yemek", "öğün", "kalori", "protein", "kahvaltı", "öğle", "a
 WORKOUT_WORDS = {"antrenman", "set", "tekrar", "ağırlık", "bench", "squat", "deadlift", "program", "spor", "kas", "hareket", "salon", "deload"}
 INJURY_WORDS = {"sakat", "ağrı", "diz", "omuz", "bel", "incinme", "kısıt"}
 SLEEP_WORDS = {"uyku", "yorgun", "dinlen", "uyandım", "gece"}
+# Bilimsel sorgular: "çalışma", "makale", "kanıt", "bilimsel" + kanıt terimleri
+SCIENCE_WORDS = {
+    "araştırma", "çalışma", "makale", "kanıt", "bilimsel", "doi", "pmid",
+    "study", "paper", "research", "evidence", "meta-analiz", "randomize",
+    "etkili mi", "daha iyi mi", "karşılaştır", "ne diyor", "literatür", "literatur",
+    "etkisi", "faydası", "zararı", "optimal", "optimum",
+}
 
 
 def _tokenize(text: str) -> set:
@@ -53,6 +61,8 @@ def _detect_query_domain(message: str) -> str:
         return "injury"
     if words & SLEEP_WORDS:
         return "sleep"
+    if words & SCIENCE_WORDS:
+        return "science"
     return "general"
 
 
@@ -364,6 +374,18 @@ KESİN KURALLAR - BUNA HER MESAJDA UY:
 6. Sadece kullanıcının ISTEDİĞİ cevabı ver, ekstra bağlam YOK
 7. "Efendim" kalsın ama her cümlenin SOMUT bir amacı olsun
 8. SADECE düz metin, JSON YOK
+
+PROTOCOL C (bilimsel kanıt gerektiren "neden/nasıl" soruları için):
+- Kullanıcı bir hareket/karar/hedef hakkında "neden" diyorsa yanıtını şu yapıda kur:
+  (1) Doğrudan Cevap 1 cümle → (2) biyomekanik/fizyolojik neden (moment kolu, gerim profili,
+  motor ünite rekrütmanı vb.) 1 cümle → (3) sistem bağlamında verilen küratörlü kanıt varsa
+  [Yazar, Yıl - PMID] formatında referans. Toplam 3 cümleyi geçebilir SADECE kanıt yapısı
+  gerektiriyorsa.
+- ASLA uydurma PMID verme: elinde sistem bağlamından doğrulanmış bir PMID yoksa çalışmayı
+  yazar+yıl ile an, PMID uydurma; emin değilsen dürüstçe söyle.
+- Örnek: "neden overhead extension?" → "Triceps long head, omuz üstünde fleksiyonda en fazla
+  gerilen pozisyonda çalışır efendim - uzun kas boyunda gerim hipertrofiyi belirgin artırıyor
+  (Maeo et al., 2023 - PMID:35819335)."
 
 ÖRNEKLER:
 - Kullanıcı: "bench 80x8" → "Kaydedildi efendim - bench 80kg × 8 tekrar."
