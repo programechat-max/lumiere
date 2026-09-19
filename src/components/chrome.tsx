@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 import {
   CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Flame,
-  LayoutGrid, LineChart, Settings2, Sparkles, UtensilsCrossed,
+  LayoutGrid, LineChart, Settings2, Sparkles, UserRound, UtensilsCrossed,
 } from 'lucide-react';
 import type { TabKey } from '../lib/types';
 import { dayLabelRelative, formatDayLong } from '../lib/utils';
 
-export const NAV_ORDER: TabKey[] = ['flow', 'coach', 'daily', 'workout', 'nutrition', 'progress'];
+export const NAV_ORDER: TabKey[] = ['flow', 'coach', 'daily', 'workout', 'nutrition', 'progress', 'profile'];
 
 const NAV_META: Array<{ key: TabKey; label: string; Icon: typeof LayoutGrid }> = [
   { key: 'flow', label: 'Akış', Icon: LayoutGrid },
@@ -15,6 +15,7 @@ const NAV_META: Array<{ key: TabKey; label: string; Icon: typeof LayoutGrid }> =
   { key: 'workout', label: 'Antrenman', Icon: Dumbbell },
   { key: 'nutrition', label: 'Beslenme', Icon: UtensilsCrossed },
   { key: 'progress', label: 'Gelişim', Icon: LineChart },
+  { key: 'profile', label: 'Bilgiler', Icon: UserRound },
 ];
 
 export function Logo({ compact = false }: { compact?: boolean }) {
@@ -65,7 +66,7 @@ export function PageHeader({
 export function BottomNav({ active, onNavigate }: { active: TabKey; onNavigate: (t: TabKey) => void }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
-      <ul className="mx-auto grid max-w-md grid-cols-6 gap-0.5 rounded-[26px] border border-[#e7ddcf] bg-white/92 p-1.5 shadow-[0_18px_45px_-20px_rgba(60,32,28,0.4)] backdrop-blur-xl">
+      <ul className="mx-auto grid max-w-md grid-cols-7 gap-0.5 rounded-[26px] border border-[#e7ddcf] bg-white/92 p-1.5 shadow-[0_18px_45px_-20px_rgba(60,32,28,0.4)] backdrop-blur-xl">
         {NAV_META.map(({ key, label, Icon }) => {
           const on = active === key;
           return (

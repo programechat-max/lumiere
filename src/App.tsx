@@ -5,6 +5,7 @@ import { LoginScreen, RegisterScreen, OnboardingScreen } from './components/Auth
 import { FlowScreen, DailyScreen } from './components/FlowDaily';
 import { WorkoutScreen } from './components/Workout';
 import { NutritionScreen } from './components/Nutrition';
+import { BioDataScreen } from './components/BioData';
 import { CoachScreen, ProgressScreen } from './components/CoachProgress';
 import { SettingsSheet } from './components/Settings';
 import { ProgramCreator } from './components/ProgramCreator';
@@ -104,6 +105,7 @@ export default function App() {
           {tab === 'workout' && <WorkoutScreen store={store} />}
           {tab === 'nutrition' && <NutritionScreen store={store} />}
           {tab === 'progress' && <ProgressScreen store={store} />}
+          {tab === 'profile' && <BioDataScreen store={store} />}
         </div>
         {/* settings shortcut handled inside headers? global fallback */}
         <button

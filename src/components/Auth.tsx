@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { ArrowRight, Camera, Check, ChevronRight, Flame, Footprints, MoonStar, Sparkles, Target, Trophy, UtensilsCrossed, Dumbbell } from 'lucide-react';
 import { Logo } from './chrome';
+import { FORM_GROUPS } from './BioData';
 import { splitLabel } from '../lib/planner';
 import { apiFetch } from '../services/apiClient';
 import type { Store } from '../lib/store';
@@ -160,7 +161,13 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
   const [videoPreview, setVideoPreview] = useState('');
   const [videoAnalysis, setVideoAnalysis] = useState<Record<string, unknown> | null>(null);
   const [videoErr, setVideoErr] = useState('');
-  const total = 9;
+  // ---- Vücut analizi (video adımından ÖNCE; tüm alanlar opsiyonel) ----
+  // Kullanıcı InBody benzeri cihaz çıktısından okuyabildiği değerleri girer.
+  // Girilen ilk ölçüm, plan uygulanırken /api/onboarding/complete ile kalıcı
+  // ilk kayda dönüşür ve Kişisel Bilgiler sayfasının başlangıcı olur.
+  const [bodyValues, setBodyValues] = useState<Record<string, string>>({});
+  const [bodySegmentsOpen, setBodySegmentsOpen] = useState(false);
+  const total = 10;
 
   const handleVideoFile = async (file: File) => {
     if (!file) return;
@@ -184,6 +191,22 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
     }
   };
 
+  /**
+   * Onboarding formundaki ölçüm alanlarını API payload'ına çevirir.
+   * Boş bırakılan alanlar payload'a hiç girmez; hiçbir alan doldurulmadıysa
+   * null döner ve ilk kayıt oluşturulmaz (adım tamamen opsiyoneldir).
+   */
+  const collectBodyPayload = (): Record<string, number | string | null> | null => {
+    const payload: Record<string, number | string | null> = {};
+    Object.entries(bodyValues).forEach(([key, raw]) => {
+      const cleaned = raw.trim().replace(',', '.');
+      if (cleaned === '') return;
+      const parsed = Number(cleaned);
+      if (Number.isFinite(parsed)) payload[key] = parsed;
+    });
+    return Object.keys(payload).length > 0 ? payload : null;
+  };
+
   // Profil oluşturma bitince Program Oluşturucu sayfası açılır;
   // completeOnboarding, plan uygulanınca orada çağrılır.
   const finish = () => {
@@ -202,6 +225,8 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
     // Vücut videosu analizi varsa plan oluşturucuya taşınır ve orada
     // /api/onboarding/complete ile kalıcı hafızaya yazılır.
     store.applyOnboardingVideo(videoState === 'done' ? videoAnalysis : null);
+    // Vücut analizi adımı boş geçilmediyse ilk ölçüm kalıcı kayda dönüşür.
+    store.applyOnboardingBodyComposition(collectBodyPayload());
     done();
   };
   const next = () => (step < total - 1 ? setStep(step + 1) : finish());
@@ -219,7 +244,7 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
         <div key={step} className="rise-in flex flex-1 flex-col justify-center py-6">
           {step === 0 && (
             <>
-              <p className="eyebrow text-[#d92835]">Adım 1 / 9 · Profil</p>
+              <p className="eyebrow text-[#d92835]">Adım 1 / 10 · Profil</p>
               <h2 className="font-display mt-2 text-[28px] font-extrabold leading-tight">Seni nasıl<br />anışlayalım?</h2>
               <div className="card-paper mt-6 rounded-3xl p-5">
                 <Field label="Adın">
@@ -234,7 +259,7 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
           )}
           {step === 1 && (
             <>
-              <p className="eyebrow text-[#d92835]">Adım 2 / 9 · Hakkında</p>
+              <p className="eyebrow text-[#d92835]">Adım 2 / 10 · Hakkında</p>
               <h2 className="font-display mt-2 text-[28px] font-extrabold leading-tight">Metabolizmanı<br />tanıyalım.</h2>
               <div className="mt-6 grid grid-cols-2 gap-2">
                 {['Kadın', 'Erkek'].map((g) => (
@@ -253,7 +278,7 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
           )}
           {step === 3 && (
             <>
-              <p className="eyebrow text-[#d92835]">Adım 4 / 9 · Hedefin</p>
+              <p className="eyebrow text-[#d92835]">Adım 4 / 10 · Hedefin</p>
               <h2 className="font-display mt-2 text-[28px] font-extrabold leading-tight">Neye<br />odaklanalım?</h2>
               <div className="mt-6 space-y-2.5">
                 {GOALS.map((g, i) => (
@@ -268,7 +293,7 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
           )}
           {step === 4 && (
             <>
-              <p className="eyebrow text-[#d92835]">Adım 5 / 9 · Seviyen</p>
+              <p className="eyebrow text-[#d92835]">Adım 5 / 10 · Seviyen</p>
               <h2 className="font-display mt-2 text-[28px] font-extrabold leading-tight">Antrenman<br />geçmişin?</h2>
               <div className="mt-6 space-y-2.5">
                 {['Başlangıç — 0–6 ay', 'Orta seviye — 6–24 ay', 'İleri seviye — 2+ yıl'].map((l, i) => (
@@ -282,7 +307,7 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
           )}
           {step === 2 && (
             <>
-              <p className="eyebrow text-[#d92835]">Adım 3 / 9 · Vücut ölçülerin</p>
+              <p className="eyebrow text-[#d92835]">Adım 3 / 10 · Vücut ölçülerin</p>
               <h2 className="font-display mt-2 text-[28px] font-extrabold leading-tight">Boy, kilo ve<br />hedefin?</h2>
               <div className="card-paper mt-6 flex items-center justify-center gap-3 rounded-3xl p-6">
                 <input value={heightCm} onChange={(e) => setHeightCm(e.target.value.replace(/[^\d.,]/g, '').slice(0, 3))} inputMode="decimal" className="font-display w-24 bg-transparent text-center text-5xl font-extrabold outline-none" />
@@ -304,7 +329,7 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
           )}
           {step === 5 && (
             <>
-              <p className="eyebrow text-[#d92835]">Adım 6 / 9 · Antrenman</p>
+              <p className="eyebrow text-[#d92835]">Adım 6 / 10 · Antrenman</p>
               <h2 className="font-display mt-2 text-[28px] font-extrabold leading-tight">Haftada kaç gün<br />antrenman yaparsın?</h2>
               <div className="mt-6 grid grid-cols-5 gap-2">
                 {[2, 3, 4, 5, 6].map((d) => (
@@ -322,7 +347,95 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
           )}
           {step === 6 && (
             <>
-              <p className="eyebrow text-[#d92835]">Adım 7 / 9 · Vücut videosu</p>
+              <p className="eyebrow text-[#d92835]">Adım 7 / 10 · Vücut analizi</p>
+              <h2 className="font-display mt-2 text-[28px] font-extrabold leading-tight">Cihaz çıktın<br />varsa ekleyelim.</h2>
+              <p className="mt-3 text-[12px] font-semibold leading-relaxed text-[#6f6259]">
+                InBody / tanı cihazı çıktındaki değerleri girersen Jarvis antrenman ve beslenme
+                kararlarını gerçek yağ–kas dağılımına göre kurar. <b>Tüm alanlar opsiyonel</b> —
+                yalnızca okuyabildiklerini gir.
+              </p>
+
+              <div className="card-paper mt-4 rounded-3xl p-5">
+                <p className="text-[13px] font-extrabold text-[#1c1512]">Genel</p>
+                <p className="mt-0.5 text-[10.5px] font-bold text-[#b3a696]">Cihaz çıktısındaki toplam değerler</p>
+                <div className="mt-3 grid grid-cols-2 gap-2.5">
+                  {FORM_GROUPS[0].fields.map((f) => (
+                    <label key={f.key} className="block">
+                      <span className="block text-[10.5px] font-bold text-[#6f6259]">{f.label}</span>
+                      <span className="mt-1 flex items-center gap-1 rounded-xl border border-[#e7ddcf] bg-white px-2.5 py-2 focus-within:border-[#d92835]">
+                        <input
+                          value={bodyValues[f.key] ?? ''}
+                          onChange={(e) => setBodyValues((prev) => ({
+                            ...prev,
+                            [f.key]: e.target.value.replace(/[^\d.,]/g, '').slice(0, 6),
+                          }))}
+                          inputMode="decimal"
+                          placeholder="—"
+                          className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none"
+                        />
+                        <span className="shrink-0 text-[10px] font-extrabold text-[#b3a696]">{f.unit}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setBodySegmentsOpen((v) => !v)}
+                  className="mt-3.5 flex w-full items-center justify-between gap-2 rounded-xl border border-dashed border-[#ddd0bd] bg-[#f8f4ec] px-3.5 py-2.5 text-left text-[11.5px] font-extrabold text-[#6f6259]"
+                >
+                  Segmentel veriler (bacak / kol / gövde)
+                  <ChevronRight size={15} className={`shrink-0 transition-transform ${bodySegmentsOpen ? 'rotate-90' : ''}`} />
+                </button>
+
+                {bodySegmentsOpen && (
+                  <div className="mt-3.5 space-y-3.5">
+                    {FORM_GROUPS.slice(1).map((group) => (
+                      <div key={group.key}>
+                        <p className="text-[11.5px] font-extrabold text-[#1c1512]">{group.label}</p>
+                        <div className="mt-2 grid grid-cols-2 gap-2.5">
+                          {group.fields.map((f) => (
+                            <label key={f.key} className="block">
+                              <span className="block text-[10.5px] font-bold text-[#6f6259]">{f.label}</span>
+                              <span className="mt-1 flex items-center gap-1 rounded-xl border border-[#e7ddcf] bg-white px-2.5 py-2 focus-within:border-[#d92835]">
+                                <input
+                                  value={bodyValues[f.key] ?? ''}
+                                  onChange={(e) => setBodyValues((prev) => ({
+                                    ...prev,
+                                    [f.key]: e.target.value.replace(/[^\d.,]/g, '').slice(0, 6),
+                                  }))}
+                                  inputMode="decimal"
+                                  placeholder="—"
+                                  className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none"
+                                />
+                                <span className="shrink-0 text-[10px] font-extrabold text-[#b3a696]">{f.unit}</span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <p className="mt-3.5 rounded-xl bg-[#1c1512] p-3 text-[11px] font-semibold leading-relaxed text-white">
+                  {Object.values(bodyValues).filter((v) => v.trim() !== '').length} alan dolduruldu ·
+                  girilen ilk ölçüm Kişisel Bilgiler sayfanın başlangıcı olur.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => { setBodyValues({}); setBodySegmentsOpen(false); }}
+                className="mt-3 w-full rounded-2xl py-3 text-xs font-extrabold text-[#9a8c80] transition active:scale-[0.99]"
+              >
+                Atla — cihaz çıktım yanımda değil / sonra gireceğim
+              </button>
+            </>
+          )}
+          {step === 7 && (
+            <>
+              <p className="eyebrow text-[#d92835]">Adım 8 / 10 · Vücut videosu</p>
               <h2 className="font-display mt-2 text-[28px] font-extrabold leading-tight">Seni tanıyıp<br />programı ona göre<br />kurayım.</h2>
               <div className="card-paper mt-4 rounded-3xl p-5">
                 <p className="mt-3 text-[12px] font-semibold leading-relaxed text-[#6f6259]">
@@ -375,9 +488,9 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
               </button>
             </>
           )}
-          {step === 7 && (
+          {step === 8 && (
             <>
-              <p className="eyebrow text-[#d92835]">Adım 8 / 9 · Beslenme</p>
+              <p className="eyebrow text-[#d92835]">Adım 9 / 10 · Beslenme</p>
               <h2 className="font-display mt-2 text-[28px] font-extrabold leading-tight">Beslenme<br />tercihin?</h2>
               <div className="mt-6 space-y-2.5">
                 {['Dengeli', 'Akdeniz', 'Vejetaryen', 'Vegan', 'Keto'].map((dName, i) => (
@@ -393,9 +506,9 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
               </div>
             </>
           )}
-          {step === 8 && (
+          {step === 9 && (
             <>
-              <p className="eyebrow text-[#d92835]">Adım 9 / 9 · Özet</p>
+              <p className="eyebrow text-[#d92835]">Adım 10 / 10 · Özet</p>
               <h2 className="font-display mt-2 text-[28px] font-extrabold leading-tight">Her şey hazır,<br />planı kuralım.</h2>
               <div className="card-paper mt-6 space-y-2 rounded-3xl p-5">
                 {[
@@ -405,6 +518,9 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
                   ['Seviye', ['Başlangıç', 'Orta seviye', 'İleri seviye'][level]],
                   ['Antrenman', `Haftada ${days} gün · ${splitLabel(days)}`],
                   ['Beslenme', ['Dengeli', 'Akdeniz', 'Vejetaryen', 'Vegan', 'Keto'][diet]],
+                  ['Vücut analizi', Object.values(bodyValues).filter((v) => v.trim() !== '').length > 0
+                    ? `${Object.values(bodyValues).filter((v) => v.trim() !== '').length} değer girildi (ilk kayıt)`
+                    : 'Atlandı / sonra girilecek'],
                   ['Vücut videosu', videoState === 'done' ? `Analiz edildi · ${videoName}` : 'Atlandı / eklenmedi'],
                 ].map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between gap-3 rounded-xl bg-[#f8f4ec] px-3.5 py-2.5">
@@ -421,8 +537,8 @@ export function OnboardingScreen({ store, done }: { store: Store; done: () => vo
           )}
         </div>
         <button onClick={next} className="ember-btn flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-extrabold">
-          {step === 8 ? <>Program Oluşturucuyu Başlat <Sparkles size={18} /></>
-            : step === 6 && videoState === 'done' ? <>Analizle devam et <ChevronRight size={18} /></>
+          {step === 9 ? <>Program Oluşturucuyu Başlat <Sparkles size={18} /></>
+            : step === 7 && videoState === 'done' ? <>Analizle devam et <ChevronRight size={18} /></>
             : <>Devam et <ChevronRight size={18} /></>}
         </button>
       </div>

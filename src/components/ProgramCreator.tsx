@@ -59,6 +59,7 @@ export function ProgramCreator({ store, done }: { store: Store; done: () => void
       diet: input.diet,
       days: input.days,
       videoAnalysis: store.onboardingVideo ?? null,
+      bodyComposition: store.onboardingBodyComposition ?? null,
       });
       await store.generateKnowledgePlans(input.days, input.diet);
       done();

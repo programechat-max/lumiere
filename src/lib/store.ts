@@ -11,7 +11,7 @@ import { apiFetch } from '../services/apiClient';
 import * as authService from '../services/authService';
 import { pedometer } from './pedometer';
 import type { BackendProgram } from './planner';
-import type { CoachMessage, DayProgram, DayRecord, ExerciseLog, MacroTargets, MealLog, Profile } from './types';
+import type { BodyCompositionSummary, CoachMessage, DayProgram, DayRecord, ExerciseLog, MacroTargets, MealLog, Profile } from './types';
 import { isFuture, shiftISO, todayISO, uid } from './utils';
 
 const VITALS_KEY = 'lumiere.vitals.v1';
@@ -133,6 +133,16 @@ export function useLumiereStore() {
   // (build_system_prompt -> onboarding_video_analysis kategorisi), böylece
   // antrenman programı üretimi gerçekten bu analizi temel alır.
   const [onboardingVideo, setOnboardingVideo] = useState<Record<string, unknown> | null>(null);
+
+  // Onboarding "Vücut Analizi" adımında cihaz çıktısından girilen ilk ölçüm.
+  // Plan uygulanırken /api/onboarding/complete ile kalıcı ilk kayda dönüşür ve
+  // Kişisel Bilgiler sayfasındaki gelişim serisinin başlangıcı olur.
+  const [onboardingBodyComposition, setOnboardingBodyComposition] = useState<Record<string, number | string | null> | null>(null);
+
+  // Kişisel Bilgiler sayfasının sunucudan gelen özeti: güncel değerler, Jarvis
+  // kaynaklı değişim rozetleri (renk), segmentel dağılım ve haftalık seri.
+  const [bodyComposition, setBodyComposition] = useState<BodyCompositionSummary | null>(null);
+  const [bodyCompositionBusy, setBodyCompositionBusy] = useState(false);
 
   useEffect(() => writeJSON(VITALS_KEY, vitalsMap), [vitalsMap]);
   useEffect(() => writeJSON(DONE_KEY, doneMap), [doneMap]);
@@ -441,9 +451,11 @@ export function useLumiereStore() {
     days?: number;
     /** Onboarding vücut videosu analizi — /api/onboarding/complete ile kalıcı hafızaya yazılır. */
     videoAnalysis?: Record<string, unknown> | null;
+    /** Onboarding "Vücut Analizi" adımı — kalıcı İLK ölçüm kaydı olur. */
+    bodyComposition?: Record<string, number | string | null> | null;
   }
 
-  const completeOnboarding = useCallback(async ({ goal, level, weight, targetWeight, targets, gender, age, heightCm, diet, days, videoAnalysis }: CompleteOnboardingArgs) => {
+  const completeOnboarding = useCallback(async ({ goal, level, weight, targetWeight, targets, gender, age, heightCm, diet, days, videoAnalysis, bodyComposition }: CompleteOnboardingArgs) => {
     setProfileState((prev) => ({
       ...prev,
       goal, level,
@@ -475,9 +487,57 @@ export function useLumiereStore() {
     // olmalı; aksi halde ilk üretim, videoyu hiç görmeden çalışabiliyordu.
     await apiFetch('/api/onboarding/complete', {
       method: 'POST',
-      body: JSON.stringify({ ...body, video_analysis: videoAnalysis ?? undefined }),
+      body: JSON.stringify({
+        ...body,
+        video_analysis: videoAnalysis ?? undefined,
+        // Vücut analizi adımı boş geçilmediyse ilk ölçüm kaydı burada oluşur;
+        // Kişisel Bilgiler sayfasının "ilk kayıt tarihi" bu ölçümdür.
+        body_composition: bodyComposition && Object.values(bodyComposition).some((v) => v != null && v !== '')
+          ? bodyComposition
+          : undefined,
+      }),
       timeoutMs: 60_000,
     });
+  }, []);
+
+  /**
+   * Kişisel Bilgiler sayfası için vücut kompozisyonu özetini çeker.
+   * Sunucu; güncel değerleri, Jarvis kaynaklı değişim rozetlerini, segmentel
+   * dağılımı ve haftalık karşılaştırma serisini tek yanıtta döner.
+   */
+  const fetchBodyComposition = useCallback(async () => {
+    setBodyCompositionBusy(true);
+    try {
+      const res = await apiFetch('/api/body-composition', { timeoutMs: 30_000 });
+      setBodyComposition(res as BodyCompositionSummary);
+      return res as BodyCompositionSummary;
+    } catch {
+      // Ulaşılamazsa sayfa boş durum gösterir; kullanıcıya hata fırlatmayız.
+      return null;
+    } finally {
+      setBodyCompositionBusy(false);
+    }
+  }, []);
+
+  /**
+   * Yeni ölçüm kaydeder. Girilen değerler ANINDA güncel değerlere işlenir:
+   * sunucu kaydı yazıp (aynı gün için upsert) Jarvis yorumunu üretir ve
+   * güncellenmiş özeti döner, biz de onu doğrudan state'e koyarız.
+   */
+  const addBodyComposition = useCallback(async (values: Record<string, number | string | null>) => {
+    setBodyCompositionBusy(true);
+    try {
+      const res = await apiFetch('/api/body-composition', {
+        method: 'POST',
+        body: JSON.stringify(values),
+        timeoutMs: 90_000,
+        retries: 1,
+      });
+      setBodyComposition(res as BodyCompositionSummary);
+      return res as BodyCompositionSummary;
+    } finally {
+      setBodyCompositionBusy(false);
+    }
   }, []);
 
   const regenerateProgram = useCallback(async () => {
@@ -672,6 +732,9 @@ export function useLumiereStore() {
     doneMap, toggleDone,
     checkinMap, markCheckinDone, snoozeCheckIn: snoozeCheckin,
     onboardingVideo, applyOnboardingVideo: (v: Record<string, unknown> | null) => setOnboardingVideo(v),
+    onboardingBodyComposition,
+    applyOnboardingBodyComposition: (v: Record<string, number | string | null> | null) => setOnboardingBodyComposition(v),
+    bodyComposition, bodyCompositionBusy, fetchBodyComposition, addBodyComposition,
     programFor,
     // backend ekstraları
     login, register, logout, completeOnboarding, applyLocalPrograms, regenerateProgram, regenerateNutrition, generateKnowledgePlans, regenerating, ensureDay,
