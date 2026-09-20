@@ -1687,6 +1687,13 @@ eşleşmenin tutarlı çalışmasını sağlar:
     günü olsa bile. Hareketi hangi güne yerleştireceğin serbesttir AMA muscle_group
     etiketi daima kütüphane kaydıyla aynı olmalıdır; aksi halde program doğrulamadan
     geçemez ve REDDEDİLİR.
+1d. GÜN = SPLIT ŞABLONU KAS GRUPLARI (BİREBİR, FAZLASI/EKSİĞİ HATA):
+    Split şablonunda her gün için "Kas grupları: X, Y" listesi verilmıştır. O güne
+    yazacağın TÜM hareketlerin muscle_group değerleri TAM OLARAK bu listeyle sınırlıdır:
+    - Listede olmayan ek kas grubu YAZMA (örn. "Sırt Odaklı" güne Baldır, "Quadriceps
+      Odaklı" güne Hamstring & Glute veya Omuz KARIŞTIRMA - doğrulama REDDEDER).
+    - Listedeki her kas grubu o günde EN AZ 1 hareketle temsil edilmelidir (eksik de hata).
+    - Karın/Core gibi ek bloklar yalnızca split şablonu o gün için açıkça istiyorsa ekle.
 
 2. HAREKET SIRALAMASI (Gün içi):
    a) Ana bileşik (Multi-joint) - 5-8 rep, RPE {rpe_target}
