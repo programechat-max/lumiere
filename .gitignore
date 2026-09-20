@@ -34,3 +34,4 @@ ios/App/Pods/
 # Zip arşivleri / çalışma zamanı dosyaları
 *.zip
 backend/celerybeat-schedule
+.env.development.local

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:release": "node scripts/build-release.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "ios:sync": "VITE_CAPACITOR_API_URL=http://$(ipconfig getifaddr en0):8000 npm run build && PATH=/usr/local/bin:$PATH npx cap sync ios",
