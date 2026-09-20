@@ -1678,6 +1678,15 @@ eşleşmenin tutarlı çalışmasını sağlar:
     üçlüsüyle çalışırsa en yüksek hipertrofik uyarıyı alır; günleri bu üçlüyü hedefleyerek kur.
     Aynı kas grubuna haftada 2'den fazla AYNI hareketi yazma (varyasyon gereklidir); her gün
     için "focus" alanına o günün ÖNCELİKLİ kas grubunu yaz.
+1c. MUSCLE_GROUP ALANI = KÜTÜPHANE KAYDI (BİREBİR, İSTİSNA YOK):
+    Yukarıdaki hareket havuzunda HER hareketin kütüphanedeki kanonik kas grubu parantez
+    içinde yazılıdır (örn. "Reverse Pec Deck (Omuz,...)"). Çıktıdaki "muscle_group" alanını
+    HİÇBİR ZAMAN günün temasına/kanca mantığına göre yeniden sınıflandırma; havuzda yazan
+    kas grubunu BİREBİR kopyala. Rear delt / arka omuz hareketleri (Reverse Pec Deck, Face
+    Pull vb.) kütüphanede "Omuz" olarak kayıtlıysa muscle_group="Omuz" yaz - günü sırt
+    günü olsa bile. Hareketi hangi güne yerleştireceğin serbesttir AMA muscle_group
+    etiketi daima kütüphane kaydıyla aynı olmalıdır; aksi halde program doğrulamadan
+    geçemez ve REDDEDİLİR.
 
 2. HAREKET SIRALAMASI (Gün içi):
    a) Ana bileşik (Multi-joint) - 5-8 rep, RPE {rpe_target}
